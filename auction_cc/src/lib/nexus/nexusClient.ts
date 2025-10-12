@@ -1,7 +1,18 @@
 
-import { NexusSDK } from "@avail-project/nexus-core";
+import { NexusSDK } from '@avail-project/nexus-core';
 
-export const sdk = new NexusSDK({ network: "testnet" });
+// Add polyfill for Buffer in browser environment
+if (typeof window !== 'undefined') {
+  if (!global.Buffer) {
+    const { Buffer } = require('buffer');
+    global.Buffer = Buffer;
+  }
+  if (!window.Buffer) {
+    window.Buffer = global.Buffer;
+  }
+}
+ 
+export const sdk = new NexusSDK({ network: 'testnet'});
 
 // Thin wrapper that calls sdk.isInitialized() from the SDK
 export function isInitialized() {
