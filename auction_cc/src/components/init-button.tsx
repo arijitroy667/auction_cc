@@ -1,22 +1,34 @@
-'use client';
- 
-import { initializeWithProvider, isInitialized } from '../lib/nexus/nexusClient';
- 
+"use client";
+
+import { useAccount } from "wagmi";
+import { initializeWithProvider, isInitialized } from "../lib/nexus/nexusClient";
+
 export default function InitButton({
   className,
   onReady,
-}: { className?: string; onReady?: () => void }) {
+}: {
+  className?: string;
+  onReady?: () => void;
+}) {
+  const { connector } = useAccount();
+
   const onClick = async () => {
-    const eth = (window as any)?.ethereum;
     try {
+      // Get the provider from the connected wallet
+      const provider = await connector?.getProvider();
+      if (!provider) throw new Error("No provider found");
+
       // We're calling our wrapper function from the lib/nexus.ts file here.
-      // Essentially calls "sdk.initialize(provider)" - SDK method.
-      await initializeWithProvider(eth);
+      await initializeWithProvider(provider);
       onReady?.();
-      alert('Nexus initialized');
+      alert("Nexus initialized");
     } catch (e: any) {
-      alert(e?.message ?? 'Init failed');
+      alert(e?.message ?? "Init failed");
     }
   };
-  return <button className={className} onClick={onClick} disabled={isInitialized()}>Initialize Nexus</button>;
+  return (
+    <button className={className} onClick={onClick} disabled={isInitialized()}>
+      Initialize Nexus
+    </button>
+  );
 }
