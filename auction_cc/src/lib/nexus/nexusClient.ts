@@ -41,3 +41,8 @@ export async function getUnifiedBalances() {
   //Get the unified balances from the SDK
   return await sdk.getUnifiedBalances();
 }
+
+export async function getUnifiedBalance(symbol: string) {
+  //Get the unified balances from the SDK
+  return await sdk.getUnifiedBalance(symbol);
+}
