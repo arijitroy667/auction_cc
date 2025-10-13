@@ -11,7 +11,7 @@ if (typeof window !== 'undefined') {
     window.Buffer = global.Buffer;
   }
 }
- 
+
 export const sdk = new NexusSDK({ network: 'testnet'});
 
 // Thin wrapper that calls sdk.isInitialized() from the SDK
