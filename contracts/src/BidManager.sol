@@ -15,20 +15,36 @@ contract BidManager {
         uint256 amount,
         uint256 timestamp
     );
+    event BidRefunded(bytes32 indexId , address indexed Bidder);
+    event WinningBidReleased(bytes32 indexed intentId, address indexed winner);
 
     using AuctionTypes for *;
 
     IAuctionHub public auctionHub;
+    address public owner;
+    address public keeper;
 
     mapping(bytes32 => mapping(address => AuctionTypes.Bid)) public lockedBids;
     mapping(bytes32 => address[]) public auctionBidders;
 
 
+    modifier onlyKeeper() {
+        require(msg.sender == keeper, "BidManager: Caller is not the keeper");
+        _;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "BidManager: Caller is not the owner");
+        _;
+    }
+
     constructor(address _auctionHub) {
         require(_auctionHub != address(0), "Invalid auction hub address");
         auctionHub = IAuctionHub(_auctionHub);
+        owner = msg.sender;
     }
 
+    // --- Core Bidding Function ---
     function placeBid(
         bytes32 intentId,
         address token,
@@ -58,5 +74,42 @@ contract BidManager {
         return true;
     }
 
-    //refundBid
+    // --- Keeper Functions ---
+    
+    /**
+     * @notice Called by the keeper to release the winner's funds for settlement.
+     * @dev This function is called after the keeper has determined the winner off-chain.
+     * @dev It transfers the winning bid amount to the seller using bridgeandexecute from the SDK
+     */
+
+    function releaseWinningBid(bytes32 intentId, address winner) external onlyKeeper{
+        AuctionTypes.Bid storage bid = lockedBids[intentId][winner];
+        require(bid.amount > 0, "No winning bid found for this intentId");
+        require(!bid.settled, "Bid already settled");
+
+        bid.settled = true;
+        IERC20(bid.token).transfer(msg.sender,bid.amount);
+        emit WinningBidReleased(intentId, winner);
+    }
+    
+     /**
+     * @notice Called by the keeper to refund a losing bidder.
+     */
+
+     function refundBid(bytes32 intentId, address bidder) external onlyKeeper{
+        AuctionTypes.Bid storage bid = lockedBids[intentId][bidder];
+        require(bid.amount > 0, "No bid found for this intentId");
+        require(!bid.settled, "Bid already settled");
+
+        bid.settled = true;
+        IERC20(bid.token).transfer(bidder, bid.amount);
+        emit BidRefunded(intentId, bidder);
+     }
+
+    // --- Admin Functions --- 
+    function setKeeper(address _keeper) external onlyOwner {
+        require(_keeper != address(0), "Cannot set keeper to zero address");
+        keeper = _keeper;
+    }
+
 }
