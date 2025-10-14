@@ -20,12 +20,32 @@ contract AuctionHub {
         uint8 preferdChain
     );
     event AuctionCancelled(bytes32 indexed intentId);
+    event AuctionSettled(bytes32 indexed intentId , address indexed winner, uint256 winningBid);
+    event NFTtransferred(bytes32 indexed intentId, address indexed winner, uint256 tokenId);
 
     mapping(bytes32 => AuctionTypes.Auction) public auctions;
     mapping(bytes32 => AuctionTypes.Bid[]) public auctionBids;
     mapping(address => bytes32[]) public sellerAuctions;
     uint256[] public allIntentsIds;
+    address public owner;
+    address public keeper;
 
+    modifier onlyKeeper() {
+        require(msg.sender == keeper, "AuctionHub: Caller is not the keeper");
+        _;
+    }
+
+    modifier onlyOwner() {
+        require(msg.sender == owner, "AuctionHub: Caller is not the owner");
+        _;
+    }
+
+    constructor() {
+        owner = msg.sender;
+    }
+
+
+    // --- Auction related Functions ---
     function createAuction(
         address nftContract,
         uint256 tokenId,
@@ -81,6 +101,51 @@ contract AuctionHub {
         emit AuctionCancelled(intentId);
     }
 
+
+    // --- Keeper Functions ---
+
+    // Functions to be called by the keeper to settle auctions. The keeper will 
+    // also have to maintain a wallet to call these functions since they will also take 
+    // gas fees to call 
+    
+    /**
+     * @notice Called by the keeper after it determines the winner off-chain.
+     * @dev Sets the winner and moves the auction to the Finalized state.
+     */
+    function finalizeAuction(bytes32 intentId , address winner , uint256 winningBid) external onlyKeeper{
+        AuctionTypes.Auction storage auction = auctions[intentId];
+        require(auction.status == AuctionTypes.AuctionStatus.Active, "Auction not active");
+        require(block.timestamp >= auction.deadline, "Auction not ended");
+        auction.status = AuctionTypes.AuctionStatus.Finalized;
+        auction.highestBidder = winner;
+        auction.highestBid = winningBid;
+
+        emit AuctionSettled(intentId, winner, winningBid);
+    }
+    
+    /**
+     * @notice Called by the keeper to transfer the NFT to the winner.
+     * @dev Transfers the NFT to the winner and marks the auction as settled.
+     */
+
+    function NFTrelease(bytes32 intentId) external onlyKeeper{
+        AuctionTypes.Auction storage auction = auctions[intentId];
+        require(auction.status == AuctionTypes.AuctionStatus.Finalized, "Auction not finalized");
+        require(auction.highestBidder != address(0), "No winner");
+
+        IERC721(auction.nftContract).transferFrom(address(this), auction.highestBidder, auction.tokenId);
+        auction.status = AuctionTypes.AuctionStatus.Settled;
+
+        emit NFTtransferred(intentId, auction.highestBidder, auction.tokenId);
+    }
+    
+    // --- Admin Functions --- 
+    function setKeeper(address _keeper) external onlyOwner {
+        require(_keeper != address(0), "Cannot set keeper to zero address");
+        keeper = _keeper;
+    }
+
+    // --- Getter Functions ---
     function getAuction(bytes32 intentId) external view returns (AuctionTypes.Auction memory) {
         return auctions[intentId];
     }
