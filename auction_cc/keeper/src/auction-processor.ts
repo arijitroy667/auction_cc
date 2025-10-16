@@ -11,7 +11,7 @@ import {CONFIG} from "./config";
 import { getAllAuctions,getBids } from "./event-listner";
 import AUCTION_HUB_ABI from "../src/ABI/AUCTION_HUB_ABI.json";
 import BID_MANAGER_ABI from "../src/ABI/BID_MANAGER_ABI.json";
-import UNISWAP_v3_SWAP_ABI from "../src/ABI/UNISWAP_V3_SWAP_ABI.json"
+import UNISWAP_v3_SWAP_ABI from "../src/ABI/UNISWAP_V3_SWAP_ABI.json";
 
 // Initialize Nexus SDK
 const nexusSDK = new NexusSDK({ network: 'testnet' });

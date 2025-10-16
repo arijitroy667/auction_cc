@@ -1,7 +1,7 @@
-import { startEventListeners, getAllAuctions, getAllBids } from './src/event-listner';
-import { processEndedAuctions } from './src/auction-processor';
-import { CONFIG } from './src/config';
-import express from 'express';
+import { startEventListeners, getAllAuctions, getAllBids } from './event-listner';
+import { processEndedAuctions } from './auction-processor';
+import { CONFIG } from './config';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 
 const app = express();
@@ -243,8 +243,8 @@ app.use((error: Error, req: express.Request, res: express.Response, next: expres
     });
 });
 
-// 404 handler
-app.use('*', (req, res) => {
+// 404 handler - Express 5 compatible
+app.use((req, res) => {
     res.status(404).json({
         success: false,
         error: 'Endpoint not found'
