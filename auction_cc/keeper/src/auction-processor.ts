@@ -1,3 +1,4 @@
+
 import { TransferParams, 
     TransferResult,
     BridgeAndExecuteParams, 
@@ -10,36 +11,10 @@ import {CONFIG} from "./config";
 import { getAllAuctions,getBids } from "./event-listner";
 import AUCTION_HUB_ABI from "../src/ABI/AUCTION_HUB_ABI.json";
 import BID_MANAGER_ABI from "../src/ABI/BID_MANAGER_ABI.json";
+import UNISWAP_v3_SWAP_ABI from "../src/ABI/UNISWAP_V3_SWAP_ABI.json"
 
 // Initialize Nexus SDK
 const nexusSDK = new NexusSDK({ network: 'testnet' });
-
-// Uniswap V3 SwapRouter interface (simplified)
-const UNISWAP_V3_SWAP_ABI = [
-    {
-        inputs: [
-            {
-                components: [
-                    { internalType: 'address', name: 'tokenIn', type: 'address' },
-                    { internalType: 'address', name: 'tokenOut', type: 'address' },
-                    { internalType: 'uint24', name: 'fee', type: 'uint24' },
-                    { internalType: 'address', name: 'recipient', type: 'address' },
-                    { internalType: 'uint256', name: 'deadline', type: 'uint256' },
-                    { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
-                    { internalType: 'uint256', name: 'amountOutMinimum', type: 'uint256' },
-                    { internalType: 'uint160', name: 'sqrtPriceLimitX96', type: 'uint160' }
-                ],
-                internalType: 'struct ExactInputSingleParams',
-                name: 'params',
-                type: 'tuple'
-            }
-        ],
-        name: 'exactInputSingle',
-        outputs: [{ internalType: 'uint256', name: 'amountOut', type: 'uint256' }],
-        stateMutability: 'payable',
-        type: 'function'
-    }
-];
 
 // Uniswap V3 SwapRouter addresses for different chains
 const UNISWAP_V3_ROUTER_ADDRESSES: { [chainId: number]: string } = {
@@ -90,6 +65,17 @@ const TOKEN_ADDRESS_TO_SYMBOL: { [chainId: number]: { [address: string]: string 
     
 };
 
+// Stable coin decimals mapping
+const STABLE_COIN_DECIMALS: { [symbol: string]: number } = {
+    'USDC': 6,
+    'USDT': 6,
+    'DAI': 18,
+    'USDC.e': 6, // Bridged USDC on some chains
+};
+
+// Stable coins that can be considered equivalent (1:1 ratio)
+const EQUIVALENT_STABLE_COINS = ['USDC', 'USDT', 'DAI', 'USDC.e'];
+
 function getTokenSymbol(tokenAddress: string, chainId: number): string {
     const chainTokens = TOKEN_ADDRESS_TO_SYMBOL[chainId];
     if (!chainTokens) {
@@ -102,6 +88,71 @@ function getTokenSymbol(tokenAddress: string, chainId: number): string {
     }
     
     return symbol;
+}
+
+function getTokenDecimals(tokenSymbol: string): number {
+    return STABLE_COIN_DECIMALS[tokenSymbol] || 18;
+}
+
+function formatStableCoinAmount(amount: string | bigint, tokenSymbol: string): string {
+    const decimals = getTokenDecimals(tokenSymbol);
+    return ethers.formatUnits(amount, decimals);
+}
+
+function isStableCoin(tokenSymbol: string): boolean {
+    return EQUIVALENT_STABLE_COINS.includes(tokenSymbol);
+}
+
+function areEquivalentStableCoins(token1: string, token2: string): boolean {
+    return isStableCoin(token1) && isStableCoin(token2);
+}
+
+function calculateStableCoinMinimumOut(
+    amountIn: string | bigint, 
+    inputDecimals: number, 
+    outputDecimals: number, 
+    slippagePercent: number = 0.5
+): bigint {
+    // For stable coin swaps, we expect close to 1:1 ratio
+    const amountInBigInt = typeof amountIn === 'string' ? BigInt(amountIn) : amountIn;
+    
+    // Adjust for decimal differences
+    let adjustedAmount: bigint;
+    if (inputDecimals === outputDecimals) {
+        adjustedAmount = amountInBigInt;
+    } else if (inputDecimals > outputDecimals) {
+        // Input has more decimals, divide
+        const decimalDiff = inputDecimals - outputDecimals;
+        adjustedAmount = amountInBigInt / (10n ** BigInt(decimalDiff));
+    } else {
+        // Output has more decimals, multiply
+        const decimalDiff = outputDecimals - inputDecimals;
+        adjustedAmount = amountInBigInt * (10n ** BigInt(decimalDiff));
+    }
+    
+    // Apply slippage (default 0.5% for stable coins)
+    const slippageMultiplier = BigInt(Math.floor((100 - slippagePercent) * 100));
+    const minimumOut = (adjustedAmount * slippageMultiplier) / 10000n;
+    
+    return minimumOut;
+}
+
+function validateStableCoinOnlyAuction(winnerToken: string, requiredToken: string, sourceChainId: number, targetChainId: number): void {
+    const winnerSymbol = getTokenSymbol(winnerToken, sourceChainId);
+    const requiredSymbol = getTokenSymbol(requiredToken, targetChainId);
+    
+    if (!isStableCoin(winnerSymbol)) {
+        console.warn(`⚠️  WARNING: Winner token ${winnerSymbol} is not a recognized stable coin!`);
+    }
+    
+    if (!isStableCoin(requiredSymbol)) {
+        console.warn(`⚠️  WARNING: Required token ${requiredSymbol} is not a recognized stable coin!`);
+    }
+    
+    if (!isStableCoin(winnerSymbol) || !isStableCoin(requiredSymbol)) {
+        console.warn(`⚠️  This auction system is optimized for stable coin transactions only.`);
+        console.warn(`⚠️  Non-stable coin swaps may result in high slippage and unexpected behavior.`);
+    }
 }
 
 export async function processEndedAuctions() {
@@ -123,7 +174,7 @@ export async function processEndedAuctions() {
                 auctionChain.auctionHubAddress,
                 AUCTION_HUB_ABI,
                 provider
-            );
+            ) as any;
             const keeperWallet = new ethers.Wallet(CONFIG.keeperPrivateKey, provider);
     
             const auction = await auctionHub.auctions(intentId);
@@ -132,7 +183,7 @@ export async function processEndedAuctions() {
                 continue;
             }
     
-            console.log(`[!] Auction ${intentId.slice(0, 10)}... on ${auctionData.sourceChain} has ended. Processing...`);
+            console.log(`[!] Auction ${intentId.slice(0, 10)}... on ${auctionData.chain} has ended. Processing...`);
     
             const bids = getBids(intentId);
             if (bids.length === 0) {
@@ -170,7 +221,7 @@ export async function processEndedAuctions() {
                 continue;
             }
     
-            console.log(`   - Winner: ${winner.bidder} with bid of ${ethers.formatEther(winner.amount)} ${winner.token}`);
+            console.log(`   - Winner: ${winner.bidder} with bid of ${formatStableCoinAmount(winner.amount, getTokenSymbol(winner.token, auctionChain.id))} ${getTokenSymbol(winner.token, auctionChain.id)}`);
     
             console.log("   - Finalizing auction and transferring NFT to winner...");
             try {
@@ -195,7 +246,7 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         console.log(`   - Starting cross-chain settlement for auction ${intentId.slice(0, 10)}...`);
         
         const sourceChainConfig = getChainConfig(sourceChain);
-        const targetChainConfig = getChainConfig(auction.preferdChain.toString());
+        const targetChainConfig = getChainConfig(auction.preferredChain?.toString() || auction.preferdChain?.toString());
         
         if (!sourceChainConfig || !targetChainConfig) {
             throw new Error(`Chain configuration not found`);
@@ -207,7 +258,7 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
             sourceChainConfig.bidManagerAddress,
             BID_MANAGER_ABI,
             new ethers.Wallet(CONFIG.keeperPrivateKey, sourceProvider)
-        );
+        ) as any;
 
         // Release the winning bid from BidManager
         console.log(`   - Releasing winning bid from BidManager on ${sourceChain}...`);
@@ -217,21 +268,31 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
 
         // Initialize Nexus SDK if not already initialized
         if (!nexusSDK.isInitialized()) {
-            const keeperProvider = new ethers.Wallet(CONFIG.keeperPrivateKey, sourceProvider).provider;
-            await nexusSDK.initialize(keeperProvider);
+            const keeperWallet = new ethers.Wallet(CONFIG.keeperPrivateKey, sourceProvider);
+            const keeperProvider = keeperWallet.provider;
+            if (!keeperProvider) {
+                throw new Error("Failed to get provider from wallet");
+            }
+            await nexusSDK.initialize(keeperProvider as any);
         }
 
         const winnerTokenAddress = winner.token;
-        const requiredTokenAddress = auction.preferdToken;
+        const requiredTokenAddress = auction.preferredToken || auction.preferdToken;
         const bidAmount = winner.amount;
+
+        // Validate that we're working with stable coins as expected
+        validateStableCoinOnlyAuction(winnerTokenAddress, requiredTokenAddress, sourceChainConfig.id, targetChainConfig.id);
 
         // Convert token addresses to symbols
         const winnerTokenSymbol = getTokenSymbol(winnerTokenAddress, sourceChainConfig.id);
         const requiredTokenSymbol = getTokenSymbol(requiredTokenAddress, targetChainConfig.id);
 
-        // Check if tokens are the same (no swap needed)
+        console.log(`   - Winner token: ${winnerTokenSymbol} (${formatStableCoinAmount(bidAmount, winnerTokenSymbol)})`);
+        console.log(`   - Required token: ${requiredTokenSymbol}`);
+
+        // Check if tokens are the same or equivalent stable coins
         if (winnerTokenSymbol === requiredTokenSymbol) {
-            console.log(`   - Tokens match. Using simple bridge for ${ethers.formatEther(bidAmount)} tokens...`);
+            console.log(`   - Tokens match exactly. Using simple bridge for ${formatStableCoinAmount(bidAmount, winnerTokenSymbol)} ${winnerTokenSymbol}...`);
             
             // Simple bridge transfer
             const bridgeResult: TransferResult = await nexusSDK.transfer({
@@ -243,15 +304,18 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
             }as TransferParams);
 
             console.log(`   - Bridge transaction successful: ${bridgeResult}`);
-        } else {
-            console.log(`   - Tokens differ. Using bridge + swap via Uniswap V3...`);
-            console.log(`   - Bridging ${ethers.formatEther(bidAmount)} ${winnerTokenAddress} and swapping to ${requiredTokenAddress}`);
+        } else if (areEquivalentStableCoins(winnerTokenSymbol, requiredTokenSymbol)) {
+            console.log(`   - Tokens are equivalent stable coins (${winnerTokenSymbol} ≈ ${requiredTokenSymbol}). Using optimized stable coin swap...`);
             
-            // Get the correct Uniswap V3 Router address for the target chain
+            // For stable coin swaps, use the lowest fee tier (0.05%) for better rates
             const uniswapRouterAddress = getUniswapV3RouterAddress(targetChainConfig.id);
-            console.log(`   - Using Uniswap V3 Router at ${uniswapRouterAddress} on chain ${targetChainConfig.id}`);
+            console.log(`   - Using Uniswap V3 Router at ${uniswapRouterAddress} with 0.05% fee tier for stable coin pair`);
             
-            // Use bridge and execute with proper Nexus SDK format
+            // Calculate minimum amount out with 0.5% slippage for stable coins
+            const winnerDecimals = getTokenDecimals(winnerTokenSymbol);
+            const requiredDecimals = getTokenDecimals(requiredTokenSymbol);
+            const amountOutMinimum = calculateStableCoinMinimumOut(bidAmount, winnerDecimals, requiredDecimals);
+            
             const bridgeAndExecuteResult: BridgeAndExecuteResult = await nexusSDK.bridgeAndExecute({
                 token: winnerTokenSymbol,
                 amount: bidAmount.toString(),
@@ -259,7 +323,7 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
                 sourceChains: [sourceChainConfig.id],
                 execute: {
                     contractAddress: uniswapRouterAddress,
-                    contractAbi: UNISWAP_V3_SWAP_ABI,
+                    contractAbi: UNISWAP_v3_SWAP_ABI,
                     functionName: 'exactInputSingle',
                     buildFunctionParams: (
                         token: any,
@@ -270,12 +334,12 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
                         const swapParams = {
                             tokenIn: winnerTokenAddress,
                             tokenOut: requiredTokenAddress,
-                            fee: 3000, // 0.3% fee tier
+                            fee: 500, // 0.05% fee tier for stable coin pairs
                             recipient: auction.seller,
                             deadline: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
                             amountIn: amount,
-                            amountOutMinimum: 0, // Accept any amount of tokens out (in production, calculate proper minimum)
-                            sqrtPriceLimitX96: 0 // No price limit
+                            amountOutMinimum: amountOutMinimum.toString(),
+                            sqrtPriceLimitX96: 0 // No price limit for stable coins
                         };
                         
                         return {
@@ -290,7 +354,53 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
                 waitForReceipt: true,
             } as BridgeAndExecuteParams);
 
-            console.log(`   - Bridge and execute transaction successful: ${bridgeAndExecuteResult}`);
+            console.log(`   - Stable coin bridge and swap transaction successful: ${bridgeAndExecuteResult}`);
+        } else {
+            // This case should not occur if we're only using stable coins, but keeping for safety
+            console.warn(`   - Warning: Non-stable coin detected (${winnerTokenSymbol} -> ${requiredTokenSymbol}). This may result in high slippage and fees!`);
+            console.log(`   - Using standard bridge + swap with higher fee tier...`);
+            
+            const uniswapRouterAddress = getUniswapV3RouterAddress(targetChainConfig.id);
+            
+            const bridgeAndExecuteResult: BridgeAndExecuteResult = await nexusSDK.bridgeAndExecute({
+                token: winnerTokenSymbol,
+                amount: bidAmount.toString(),
+                toChainId: targetChainConfig.id,
+                sourceChains: [sourceChainConfig.id],
+                execute: {
+                    contractAddress: uniswapRouterAddress,
+                    contractAbi: UNISWAP_v3_SWAP_ABI,
+                    functionName: 'exactInputSingle',
+                    buildFunctionParams: (
+                        token: any,
+                        amount: string,
+                        chainId: number,
+                        userAddress: `0x${string}`,
+                    ) => {
+                        const swapParams = {
+                            tokenIn: winnerTokenAddress,
+                            tokenOut: requiredTokenAddress,
+                            fee: 3000, // 0.3% fee tier for non-stable pairs
+                            recipient: auction.seller,
+                            deadline: Math.floor(Date.now() / 1000) + 3600,
+                            amountIn: amount,
+                            amountOutMinimum: 0, // Accept any amount for non-stable pairs (risky but necessary)
+                            sqrtPriceLimitX96: 0
+                        };
+                        
+                        return {
+                            functionParams: [swapParams],
+                        };
+                    },
+                    tokenApproval: {
+                        token: winnerTokenSymbol,
+                        amount: bidAmount.toString(),
+                    },
+                },
+                waitForReceipt: true,
+            } as BridgeAndExecuteParams);
+
+            console.log(`   - Non-stable coin bridge and swap transaction successful: ${bridgeAndExecuteResult}`);
         }
 
         // Refund losing bidders
@@ -306,7 +416,7 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
                         bidChainConfig.bidManagerAddress,
                         BID_MANAGER_ABI,
                         new ethers.Wallet(CONFIG.keeperPrivateKey, bidProvider)
-                    );
+                    ) as any;
 
                     const refundTx = await bidManagerContract.refundBid(intentId, bid.bidder);
                     await refundTx.wait();
@@ -328,7 +438,7 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
             auctionChainConfig.auctionHubAddress,
             AUCTION_HUB_ABI,
             new ethers.Wallet(CONFIG.keeperPrivateKey, auctionProvider)
-        );
+        ) as any;
 
         const nftReleaseTx = await auctionHub.NFTrelease(intentId);
         await nftReleaseTx.wait();
