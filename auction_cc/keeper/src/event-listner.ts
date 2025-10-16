@@ -1,9 +1,12 @@
 import {ethers} from "ethers";
 import {CONFIG} from "./config";
-
+import AUCTION_HUB_ABI from "../src/ABI/AUCTION_HUB_ABI.json";
+import BID_MANAGER_ABI from "../src/ABI/BID_MANAGER_ABI.json";
 
 const bidStore = new Map<string, any[]>();
 const auctionStore = new Map<string, any>();
+
+
 
 export function addBid(intentId: string, bid: any) {
     if (!bidStore.has(intentId)) {

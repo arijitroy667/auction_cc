@@ -8,6 +8,8 @@ import { TransferParams,
 import {ethers} from "ethers";
 import {CONFIG} from "./config";
 import { getAllAuctions,getBids } from "./event-listner";
+import AUCTION_HUB_ABI from "../src/ABI/AUCTION_HUB_ABI.json";
+import BID_MANAGER_ABI from "../src/ABI/BID_MANAGER_ABI.json";
 
 // Initialize Nexus SDK
 const nexusSDK = new NexusSDK({ network: 'testnet' });
@@ -288,7 +290,7 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
                 waitForReceipt: true,
             } as BridgeAndExecuteParams);
 
-            console.log(`   - Bridge and execute transaction successful: ${bridgeAndExecuteResult.hash}`);
+            console.log(`   - Bridge and execute transaction successful: ${bridgeAndExecuteResult}`);
         }
 
         // Refund losing bidders
@@ -318,6 +320,9 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         // Finally, release the NFT to the winner
         console.log(`   - Releasing NFT to winner...`);
         const auctionChainConfig = getChainConfig(auction.sourceChain);
+        if (!auctionChainConfig) {
+            throw new Error(`Auction chain configuration not found for sourceChain: ${auction.sourceChain}`);
+        }
         const auctionProvider = new ethers.JsonRpcProvider(auctionChainConfig.rpcUrl);
         const auctionHub = new ethers.Contract(
             auctionChainConfig.auctionHubAddress,
