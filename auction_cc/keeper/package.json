@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node index.ts",
+    "dev": "ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "deploy": "vercel --prod",
-    "vercel-build": "echo 'No build step required'"
+    "vercel-build": "npm run build"
   },
   "dependencies": {
     "@avail-project/nexus-core": "^0.0.1",
