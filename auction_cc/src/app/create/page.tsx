@@ -160,6 +160,7 @@ export default function CreateAuctionPage() {
       const intentId = await auctionHubContract.createAuction(params);
       
       alert(`Auction created successfully! Intent ID: ${intentId}`);
+      console.log('Auction created with Intent ID:', intentId);
       
       // Reset form
       setAuctionForm({

@@ -33,6 +33,7 @@ export default function AuctionTestPanel() {
   
   const [intentId, setIntentId] = useState("");
   const [auctionData, setAuctionData] = useState<AuctionData | null>(null);
+  const [allIntentIds, setAllIntentIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -132,6 +133,34 @@ export default function AuctionTestPanel() {
     }
   };
 
+  const handleGetAllIntentIds = async () => {
+    if (!walletClient || !isConnected) {
+      setError("Please connect your wallet");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const auctionHub = getAuctionHubContract(signer);
+
+      const intentIds = await auctionHub.getAllIntentIds();
+      
+      setAllIntentIds(intentIds);
+      setSuccess(`Found ${intentIds.length} auction(s)`);
+    } catch (err: any) {
+      console.error("Error fetching all intent IDs:", err);
+      setError(err.message || "Failed to fetch intent IDs");
+      setAllIntentIds([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp * 1000).toLocaleString();
   };
@@ -157,7 +186,7 @@ export default function AuctionTestPanel() {
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-4 mb-6">
+      <div className="flex gap-4 mb-6 flex-wrap">
         <button
           onClick={handleViewNFT}
           disabled={loading || !isConnected}
@@ -172,6 +201,14 @@ export default function AuctionTestPanel() {
           className="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
         >
           {loading ? "Processing..." : "❌ Cancel Auction"}
+        </button>
+
+        <button
+          onClick={handleGetAllIntentIds}
+          disabled={loading || !isConnected}
+          className="px-6 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors"
+        >
+          {loading ? "Loading..." : "📋 Get All Intent IDs"}
         </button>
       </div>
 
@@ -190,7 +227,7 @@ export default function AuctionTestPanel() {
 
       {/* Auction Data Display */}
       {auctionData && (
-        <div className="bg-white/5 border border-white/10 rounded-lg p-6">
+        <div className="bg-white/5 border border-white/10 rounded-lg p-6 mb-6">
           <h4 className="text-white font-semibold mb-4 text-lg">📋 Auction Details</h4>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -250,6 +287,31 @@ export default function AuctionTestPanel() {
               <span className="text-gray-400">Deadline:</span>
               <p className="text-white">{formatDate(auctionData.deadline)}</p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* All Intent IDs Display */}
+      {allIntentIds.length > 0 && (
+        <div className="bg-white/5 border border-white/10 rounded-lg p-6 mb-6">
+          <h4 className="text-white font-semibold mb-4 text-lg">🗂️ All Intent IDs ({allIntentIds.length})</h4>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {allIntentIds.map((id, index) => (
+              <div 
+                key={id} 
+                className="bg-white/5 border border-white/10 rounded-lg p-3 hover:bg-white/10 transition-colors cursor-pointer"
+                onClick={() => setIntentId(id)}
+                title="Click to load this intent ID"
+              >
+                <div className="text-xs text-gray-400 mb-1">#{index + 1}</div>
+                <div className="text-white font-mono text-sm break-all">{id}</div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+            <p className="text-blue-300 text-sm">💡 Click on any Intent ID to load it into the input field</p>
           </div>
         </div>
       )}

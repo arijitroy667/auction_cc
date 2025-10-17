@@ -1,59 +1,52 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
 console.log('🚀 Starting Auction Keeper...');
 console.log('📁 Working directory:', process.cwd());
 console.log('🔧 Node environment:', process.env.NODE_ENV || 'development');
-
-import { startEventListeners, getAllAuctions, getAllBids, restartEventListeners } from './event-listner';
-import { processEndedAuctions } from './auction-processor';
-import { CONFIG } from './config';
-import express, { Request, Response } from 'express';
-import cors from 'cors';
-
-const app = express();
-
+const event_listner_1 = require("./event-listner");
+const auction_processor_1 = require("./auction-processor");
+const config_1 = require("./config");
+const express_1 = __importDefault(require("express"));
+const cors_1 = __importDefault(require("cors"));
+const app = (0, express_1.default)();
 // Middleware
-app.use(cors());
-app.use(express.json());
-
+app.use((0, cors_1.default)());
+app.use(express_1.default.json());
 // Event listeners management
-let eventListenerInterval: NodeJS.Timeout | null = null;
-let auctionProcessingInterval: NodeJS.Timeout | null = null;
-
+let eventListenerInterval = null;
+let auctionProcessingInterval = null;
 // Initialize event listeners once and keep them alive
 async function initializeEventMonitoring() {
     console.log('🔄 Initializing event monitoring...');
-    
     // Start event listeners once - they will stay active
-    await startEventListeners();
-    
+    await (0, event_listner_1.startEventListeners)();
     // Note: Event listeners will remain active and automatically reconnect if needed
     // No need to restart them periodically as it causes missed events
-    
     console.log('✅ Event monitoring initialized - listeners will remain active');
 }
-
 // Initialize auction processing
 function initializeAuctionProcessing() {
     console.log('⏰ Initializing auction processing...');
-    
     // Process auctions every 2 minutes
     auctionProcessingInterval = setInterval(async () => {
         try {
-            await processEndedAuctions();
-        } catch (error) {
+            await (0, auction_processor_1.processEndedAuctions)();
+        }
+        catch (error) {
             console.error('❌ Error in periodic auction processing:', error);
         }
-    }, CONFIG.processingInterval);
-    
-    console.log(`✅ Auction processing initialized with ${CONFIG.processingInterval}ms interval`);
+    }, config_1.CONFIG.processingInterval);
+    console.log(`✅ Auction processing initialized with ${config_1.CONFIG.processingInterval}ms interval`);
 }
-
 // Health check endpoint
 app.get('/health', (req, res) => {
-    res.json({ 
-        status: 'healthy', 
+    res.json({
+        status: 'healthy',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         environment: process.env.NODE_ENV || 'development',
@@ -61,23 +54,22 @@ app.get('/health', (req, res) => {
         auctionProcessing: !!auctionProcessingInterval
     });
 });
-
 // Get all auctions
 app.get('/api/auctions', (req, res) => {
     try {
-        const auctions = getAllAuctions();
+        const auctions = (0, event_listner_1.getAllAuctions)();
         const auctionsArray = Array.from(auctions.entries()).map(([intentId, auction]) => ({
             intentId,
             ...auction
         }));
-        
         res.json({
             success: true,
             count: auctionsArray.length,
             data: auctionsArray,
             timestamp: new Date().toISOString()
         });
-    } catch (error) {
+    }
+    catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({
             success: false,
@@ -86,21 +78,18 @@ app.get('/api/auctions', (req, res) => {
         });
     }
 });
-
 // Get specific auction by intentId
 app.get('/api/auctions/:intentId', (req, res) => {
     try {
         const { intentId } = req.params;
-        const auctions = getAllAuctions();
+        const auctions = (0, event_listner_1.getAllAuctions)();
         const auction = auctions.get(intentId);
-        
         if (!auction) {
             return res.status(404).json({
                 success: false,
                 error: 'Auction not found'
             });
         }
-        
         res.json({
             success: true,
             data: {
@@ -109,7 +98,8 @@ app.get('/api/auctions/:intentId', (req, res) => {
             },
             timestamp: new Date().toISOString()
         });
-    } catch (error) {
+    }
+    catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({
             success: false,
@@ -118,23 +108,22 @@ app.get('/api/auctions/:intentId', (req, res) => {
         });
     }
 });
-
 // Get all bids
 app.get('/api/bids', (req, res) => {
     try {
-        const allBids = getAllBids();
+        const allBids = (0, event_listner_1.getAllBids)();
         const bidsArray = Array.from(allBids.entries()).map(([intentId, bids]) => ({
             intentId,
             bids
         }));
-        
         res.json({
             success: true,
             count: bidsArray.length,
             data: bidsArray,
             timestamp: new Date().toISOString()
         });
-    } catch (error) {
+    }
+    catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({
             success: false,
@@ -143,14 +132,12 @@ app.get('/api/bids', (req, res) => {
         });
     }
 });
-
 // Get bids for specific auction
 app.get('/api/bids/:intentId', (req, res) => {
     try {
         const { intentId } = req.params;
-        const allBids = getAllBids();
+        const allBids = (0, event_listner_1.getAllBids)();
         const bids = allBids.get(intentId) || [];
-        
         res.json({
             success: true,
             intentId,
@@ -158,7 +145,8 @@ app.get('/api/bids/:intentId', (req, res) => {
             data: bids,
             timestamp: new Date().toISOString()
         });
-    } catch (error) {
+    }
+    catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({
             success: false,
@@ -167,33 +155,30 @@ app.get('/api/bids/:intentId', (req, res) => {
         });
     }
 });
-
 // Get keeper configuration (without sensitive data)
 app.get('/api/config', (req, res) => {
     try {
         const safeConfig = {
-            chains: Object.fromEntries(
-                Object.entries(CONFIG.chains).map(([key, chain]) => [
-                    key,
-                    {
-                        id: chain.id,
-                        name: chain.name,
-                        hasAuctionHub: !!chain.auctionHubAddress,
-                        hasBidManager: !!chain.bidManagerAddress
-                    }
-                ])
-            ),
-            processingInterval: CONFIG.processingInterval,
+            chains: Object.fromEntries(Object.entries(config_1.CONFIG.chains).map(([key, chain]) => [
+                key,
+                {
+                    id: chain.id,
+                    name: chain.name,
+                    hasAuctionHub: !!chain.auctionHubAddress,
+                    hasBidManager: !!chain.bidManagerAddress
+                }
+            ])),
+            processingInterval: config_1.CONFIG.processingInterval,
             environment: process.env.NODE_ENV || 'development',
             eventRefreshInterval: 60000, // 1 minute
             lastUpdated: new Date().toISOString()
         };
-        
         res.json({
             success: true,
             data: safeConfig
         });
-    } catch (error) {
+    }
+    catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({
             success: false,
@@ -202,9 +187,8 @@ app.get('/api/config', (req, res) => {
         });
     }
 });
-
 // Error handling middleware
-app.use((error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+app.use((error, req, res, next) => {
     console.error('Express error:', error);
     res.status(500).json({
         success: false,
@@ -212,7 +196,6 @@ app.use((error: Error, req: express.Request, res: express.Response, next: expres
         details: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
     });
 });
-
 // 404 handler
 app.use((req, res) => {
     res.status(404).json({
@@ -220,35 +203,27 @@ app.use((req, res) => {
         error: 'Endpoint not found'
     });
 });
-
 // Graceful shutdown function
 function gracefulShutdown() {
     console.log('\n🛑 Shutting down keeper...');
-    
     if (eventListenerInterval) {
         clearInterval(eventListenerInterval);
         console.log('✅ Event listener interval cleared');
     }
-    
     if (auctionProcessingInterval) {
         clearInterval(auctionProcessingInterval);
         console.log('✅ Auction processing interval cleared');
     }
-    
     process.exit(0);
 }
-
 // Initialize monitoring and processing for all environments
 console.log('🚀 Starting keeper in production mode...');
 initializeEventMonitoring();
 initializeAuctionProcessing();
-
 // Export the Express app for Vercel
-export default app;
-
+exports.default = app;
 // For local development and production
 const PORT = process.env.PORT || 3001;
-
 app.listen(PORT, () => {
     console.log(`🌐 Keeper API server running on port ${PORT}`);
     console.log(`📡 Health check: http://localhost:${PORT}/health`);
@@ -260,9 +235,8 @@ app.listen(PORT, () => {
     console.log(`   GET  /api/bids/:id           - Get bids for auction`);
     console.log(`   GET  /api/config             - Get keeper configuration`);
     console.log(`🔄 Event listeners refresh every 60 seconds`);
-    console.log(`⏰ Auction processing every ${CONFIG.processingInterval}ms`);
+    console.log(`⏰ Auction processing every ${config_1.CONFIG.processingInterval}ms`);
 });
-
 // Handle shutdown signals
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);

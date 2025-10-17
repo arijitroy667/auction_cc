@@ -53,12 +53,12 @@ export const CONFIG = {
       bidManagerAddress: "0x8CDcA61d24949ecE0402e38b0F3F55929F697342",
     }
   },
-  // Process auctions every 2 minutes (event listeners refresh every 1 minute)
+  // Process auctions every 2 minutes
   processingInterval: parseInt(process.env.PROCESSING_INTERVAL || '120000'), // 2 minutes default
 };
 
 console.log('✅ Configuration loaded successfully');
 console.log('📊 Processing interval:', CONFIG.processingInterval + 'ms');
 console.log('🔗 Chains configured:', Object.keys(CONFIG.chains).length);
-console.log('🔄 Event listeners will refresh every 60 seconds');
+console.log('🎧 Event listeners will remain active continuously');
 console.log('-------------------------------------------------------------');
