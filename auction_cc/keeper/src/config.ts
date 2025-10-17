@@ -32,17 +32,17 @@ export const CONFIG = {
       auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
       bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387",
     },
-    polygon: {
-      id: 137,
-      name: "polygon",
-      rpcUrl: process.env.POLYGON_RPC_URL!,
+    polygonMumbai: {
+      id: 80001,
+      name: "polygonMumbai",
+      rpcUrl: process.env.POLYGON_MUMBAI_RPC_URL!,
       auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
       bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387",
     },
-    arbitrum: {
-      id: 42161,
-      name: "arbitrum",
-      rpcUrl: process.env.ARBITRUM_RPC_URL!,
+    arbitrumSepolia: {
+      id: 421614,
+      name: "arbitrumSepolia",
+      rpcUrl: process.env.ARBITRUM_SEPOLIA_RPC_URL!,
       auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
       bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387",
     },
