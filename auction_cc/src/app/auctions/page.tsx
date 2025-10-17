@@ -5,12 +5,46 @@ import { useAccount } from "wagmi";
 import { isInitialized } from "@/lib/nexus/nexusClient";
 import Navbar from "@/components/navbar";
 import Link from "next/link";
+import { ethers } from "ethers";
+
+interface Auction {
+  intentId: string;
+  seller: string;
+  nftContract: string;
+  tokenId: string;
+  startingPrice: string;
+  reservePrice: string;
+  deadline: string;
+  preferdToken: string;
+  preferdChain: string;
+  sourceChain: string;
+  status: number;
+  txHash: string;
+  timestamp: string;
+}
+
+interface KeeperAuctionsResponse {
+  success: boolean;
+  count: number;
+  data: Auction[];
+  timestamp: string;
+}
+
+const KEEPER_API_URL = 'http://localhost:3001';
+const CHAIN_NAMES: { [key: string]: string } = {
+  'ethereum': 'Ethereum Sepolia',
+  'arbitrumSepolia': 'Arbitrum Sepolia',
+  'base': 'Base Sepolia',
+  'optimism': 'Optimism Sepolia'
+};
 
 export default function AuctionsPage() {
   const { isConnected } = useAccount();
   const [initialized, setInitialized] = useState(isInitialized());
-  const [auctions, setAuctions] = useState<any[]>([]);
+  const [auctions, setAuctions] = useState<Auction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedChain, setSelectedChain] = useState<string>('');
 
   // Check for Nexus initialization status changes
   useEffect(() => {
@@ -28,43 +62,74 @@ export default function AuctionsPage() {
 
   const refreshAuctions = async () => {
     setLoading(true);
+    setError(null);
     try {
-      // TODO: Implement actual auction fetching from your API
-      // const response = await fetch('/api/auctions');
-      // const data = await response.json();
-      // setAuctions(data);
+      const response = await fetch(`${KEEPER_API_URL}/api/auctions`);
       
-      // Mock data for now
-      setTimeout(() => {
-        setAuctions([
-          {
-            id: "1",
-            title: "Cosmic Cat #1234",
-            currentBid: "2.5 ETH",
-            timeLeft: "2h 34m",
-            image: "/placeholder-nft.jpg",
-            chain: "Ethereum"
-          },
-          {
-            id: "2", 
-            title: "Digital Dreams #567",
-            currentBid: "150 USDC",
-            timeLeft: "5h 12m",
-            image: "/placeholder-nft.jpg",
-            chain: "Arbitrum"
-          }
-        ]);
-        setLoading(false);
-      }, 1000);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch auctions: ${response.statusText}`);
+      }
+
+      const data: KeeperAuctionsResponse = await response.json();
+      
+      if (data.success) {
+        // Filter active auctions (status 0 = active)
+        const activeAuctions = data.data.filter(auction => {
+          const now = Math.floor(Date.now() / 1000);
+          const deadline = parseInt(auction.deadline);
+          return auction.status === 0 && deadline > now;
+        });
+        
+        setAuctions(activeAuctions);
+        console.log(`Fetched ${activeAuctions.length} active auctions from keeper`);
+      } else {
+        throw new Error('Invalid response from keeper API');
+      }
     } catch (error) {
       console.error('Error fetching auctions:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch auctions');
+      setAuctions([]);
+    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
     refreshAuctions();
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(refreshAuctions, 30000);
+    return () => clearInterval(interval);
   }, []);
+
+  const formatTimeLeft = (deadline: string) => {
+    const now = Math.floor(Date.now() / 1000);
+    const deadlineNum = parseInt(deadline);
+    const secondsLeft = deadlineNum - now;
+    
+    if (secondsLeft <= 0) return 'Ended';
+    
+    const hours = Math.floor(secondsLeft / 3600);
+    const minutes = Math.floor((secondsLeft % 3600) / 60);
+    
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      return `${days}d ${hours % 24}h`;
+    }
+    
+    return `${hours}h ${minutes}m`;
+  };
+
+  const formatPrice = (price: string) => {
+    try {
+      return ethers.formatEther(price);
+    } catch {
+      return '0';
+    }
+  };
+
+  const filteredAuctions = selectedChain 
+    ? auctions.filter(a => a.sourceChain === selectedChain)
+    : auctions;
 
   return (
     <div className="relative min-h-screen w-full bg-black">
@@ -92,27 +157,32 @@ export default function AuctionsPage() {
 
             {/* Filters */}
             <div className="flex flex-wrap gap-4 mb-8">
-              <select className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white backdrop-blur-sm">
+              <select 
+                value={selectedChain}
+                onChange={(e) => setSelectedChain(e.target.value)}
+                className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white backdrop-blur-sm"
+              >
                 <option value="">All Chains</option>
-                <option value="ethereum">Ethereum</option>
-                <option value="arbitrum">Arbitrum</option>
-                <option value="optimism">Optimism</option>
-                <option value="base">Base</option>
+                <option value="ethereum">Ethereum Sepolia</option>
+                <option value="arbitrumSepolia">Arbitrum Sepolia</option>
+                <option value="optimism">Optimism Sepolia</option>
+                <option value="base">Base Sepolia</option>
               </select>
-              <select className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white backdrop-blur-sm">
-                <option value="">All Categories</option>
-                <option value="art">Art</option>
-                <option value="gaming">Gaming</option>
-                <option value="music">Music</option>
-                <option value="collectibles">Collectibles</option>
-              </select>
-              <select className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white backdrop-blur-sm">
-                <option value="">Sort by</option>
-                <option value="ending-soon">Ending Soon</option>
-                <option value="newest">Newest</option>
-                <option value="highest-bid">Highest Bid</option>
-              </select>
+              <div className="flex-1"></div>
+              <div className="text-white/70 text-sm flex items-center">
+                <span className="mr-2">📊</span>
+                {filteredAuctions.length} active auction{filteredAuctions.length !== 1 ? 's' : ''}
+              </div>
             </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-lg backdrop-blur-sm">
+                <p className="text-red-300 text-center">
+                  ⚠️ {error}
+                </p>
+              </div>
+            )}
 
             {/* Auctions Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
@@ -126,19 +196,60 @@ export default function AuctionsPage() {
                     <div className="h-3 bg-white/10 rounded w-1/2"></div>
                   </div>
                 ))
-              ) : auctions.length > 0 ? (
-                auctions.map((auction) => (
-                  <div key={auction.id} className="bg-white/5 p-6 rounded-xl border border-white/10 backdrop-blur-sm hover:bg-white/10 transition-all duration-200 cursor-pointer">
-                    <div className="w-full h-48 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-lg mb-4 flex items-center justify-center">
-                      <span className="text-white/50">NFT Image</span>
+              ) : filteredAuctions.length > 0 ? (
+                filteredAuctions.map((auction) => (
+                  <div 
+                    key={auction.intentId} 
+                    className="bg-white/5 p-6 rounded-xl border border-white/10 backdrop-blur-sm hover:bg-white/10 transition-all duration-200 cursor-pointer group"
+                  >
+                    <div className="w-full h-48 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-lg mb-4 flex items-center justify-center overflow-hidden relative">
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+                        <span className="text-white/30 text-xs mb-2">NFT Contract</span>
+                        <span className="text-white/50 text-xs font-mono break-all text-center">
+                          {auction.nftContract.slice(0, 6)}...{auction.nftContract.slice(-4)}
+                        </span>
+                        <span className="text-white/70 text-2xl font-bold mt-2">#{auction.tokenId}</span>
+                      </div>
                     </div>
-                    <h3 className="text-white font-semibold mb-2">{auction.title}</h3>
-                    <p className="text-white/70 text-sm mb-2">Current bid: {auction.currentBid}</p>
-                    <div className="flex justify-between items-center">
-                      <span className="text-white/50 text-sm">{auction.timeLeft} left</span>
-                      <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded">
-                        {auction.chain}
-                      </span>
+                    
+                    <div className="space-y-2">
+                      <h3 className="text-white font-semibold truncate group-hover:text-blue-300 transition-colors">
+                        Token #{auction.tokenId}
+                      </h3>
+                      
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-white/50">Starting:</span>
+                        <span className="text-white/90 font-mono">{formatPrice(auction.startingPrice)} ETH</span>
+                      </div>
+                      
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-white/50">Reserve:</span>
+                        <span className="text-white/90 font-mono">{formatPrice(auction.reservePrice)} ETH</span>
+                      </div>
+                      
+                      <div className="pt-3 border-t border-white/10">
+                        <div className="flex justify-between items-center">
+                          <span className="text-white/50 text-sm flex items-center">
+                            <span className="mr-1">⏰</span>
+                            {formatTimeLeft(auction.deadline)}
+                          </span>
+                          <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded">
+                            {CHAIN_NAMES[auction.sourceChain] || auction.sourceChain}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="pt-2">
+                        <a
+                          href={`https://sepolia.etherscan.io/tx/${auction.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-400 hover:text-blue-300 flex items-center"
+                        >
+                          <span className="mr-1">🔗</span>
+                          View Transaction
+                        </a>
+                      </div>
                     </div>
                   </div>
                 ))

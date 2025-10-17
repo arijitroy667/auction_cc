@@ -60,7 +60,18 @@ app.get('/api/auctions', (req, res) => {
         const auctions = (0, event_listner_1.getAllAuctions)();
         const auctionsArray = Array.from(auctions.entries()).map(([intentId, auction]) => ({
             intentId,
-            ...auction
+            seller: auction.seller,
+            nftContract: auction.nftContract,
+            tokenId: auction.tokenId?.toString() || auction.tokenId,
+            startingPrice: auction.startingPrice?.toString() || auction.startingPrice,
+            reservePrice: auction.reservePrice?.toString() || auction.reservePrice,
+            deadline: auction.deadline?.toString() || auction.deadline,
+            preferdToken: auction.preferdToken,
+            preferdChain: auction.preferdChain?.toString() || auction.preferdChain,
+            sourceChain: auction.sourceChain,
+            status: auction.status,
+            txHash: auction.txHash,
+            timestamp: auction.timestamp
         }));
         res.json({
             success: true,
@@ -94,7 +105,18 @@ app.get('/api/auctions/:intentId', (req, res) => {
             success: true,
             data: {
                 intentId,
-                ...auction
+                seller: auction.seller,
+                nftContract: auction.nftContract,
+                tokenId: auction.tokenId?.toString() || auction.tokenId,
+                startingPrice: auction.startingPrice?.toString() || auction.startingPrice,
+                reservePrice: auction.reservePrice?.toString() || auction.reservePrice,
+                deadline: auction.deadline?.toString() || auction.deadline,
+                preferdToken: auction.preferdToken,
+                preferdChain: auction.preferdChain?.toString() || auction.preferdChain,
+                sourceChain: auction.sourceChain,
+                status: auction.status,
+                txHash: auction.txHash,
+                timestamp: auction.timestamp
             },
             timestamp: new Date().toISOString()
         });
@@ -114,7 +136,15 @@ app.get('/api/bids', (req, res) => {
         const allBids = (0, event_listner_1.getAllBids)();
         const bidsArray = Array.from(allBids.entries()).map(([intentId, bids]) => ({
             intentId,
-            bids
+            bids: bids.map(bid => ({
+                intentId: bid.intentId,
+                bidder: bid.bidder,
+                amount: bid.amount?.toString() || bid.amount,
+                token: bid.token,
+                sourceChain: bid.sourceChain,
+                transactionHash: bid.transactionHash,
+                timestamp: bid.timestamp
+            }))
         }));
         res.json({
             success: true,
@@ -138,11 +168,20 @@ app.get('/api/bids/:intentId', (req, res) => {
         const { intentId } = req.params;
         const allBids = (0, event_listner_1.getAllBids)();
         const bids = allBids.get(intentId) || [];
+        const serializedBids = bids.map(bid => ({
+            intentId: bid.intentId,
+            bidder: bid.bidder,
+            amount: bid.amount?.toString() || bid.amount,
+            token: bid.token,
+            sourceChain: bid.sourceChain,
+            transactionHash: bid.transactionHash,
+            timestamp: bid.timestamp
+        }));
         res.json({
             success: true,
             intentId,
-            count: bids.length,
-            data: bids,
+            count: serializedBids.length,
+            data: serializedBids,
             timestamp: new Date().toISOString()
         });
     }
