@@ -1,38 +1,82 @@
-
 import { TransferParams, 
     TransferResult,
     BridgeAndExecuteParams, 
     BridgeAndExecuteResult,
     ExecuteParams,
-    ExecuteResult,
-    NexusSDK } from '@avail-project/nexus-core';
+    ExecuteResult} from '@avail-project/nexus-core';
 import {ethers} from "ethers";
 import {CONFIG} from "./config";
 import { getAllAuctions,getBids } from "./event-listner";
 import AUCTION_HUB_ABI from "../src/ABI/AUCTION_HUB_ABI.json";
 import BID_MANAGER_ABI from "../src/ABI/BID_MANAGER_ABI.json";
-import UNISWAP_v3_SWAP_ABI from "../src/ABI/UNISWAP_V3_SWAP_ABI.json";
 
-// Initialize Nexus SDK
-const nexusSDK = new NexusSDK({ network: 'testnet' });
+// Nexus SDK instance - will be initialized dynamically
+let _nexusSDK: any | null = null;
 
-// Uniswap V3 SwapRouter addresses for different chains
-const UNISWAP_V3_ROUTER_ADDRESSES: { [chainId: number]: string } = {
-    1: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Ethereum Mainnet
+async function getNexusSDK(): Promise<any> {
+    if (_nexusSDK) return _nexusSDK;
+    
+    try {
+        const { NexusSDK } = await import('@avail-project/nexus-core');
+        _nexusSDK = new NexusSDK({ network: 'testnet' });
+        
+        // Initialize with provider created from keeper's private key
+        // Use the first chain's RPC as the primary provider
+        const primaryChain = Object.values(CONFIG.chains)[0];
+        const provider = new ethers.JsonRpcProvider(primaryChain.rpcUrl);
+        const keeperWallet = new ethers.Wallet(CONFIG.keeperPrivateKey, provider);
+        
+        console.log(`[*] Initializing Nexus SDK with keeper wallet: ${keeperWallet.address}`);
+        await _nexusSDK.initialize(keeperWallet);
+        
+        console.log(`[✓] Nexus SDK initialized successfully`);
+        return _nexusSDK;
+    } catch (error) {
+        console.error('Failed to initialize Nexus SDK:', error);
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Nexus SDK initialization failed: ${message}`);
+    }
+}
+
+// Uniswap SwapRouter02 addresses for different chains
+const UNISWAP_SWAP_ROUTER02_ADDRESSES: { [chainId: number]: string } = {
     11155111: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Ethereum Sepolia
-    137: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Polygon Mainnet
     80002: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Polygon Amoy
-    42161: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Arbitrum One
     421614: "0x101F443B4d1b059569D643917553c771E1b9663E", // Arbitrum Sepolia
-    8453: "0x2626664c2603336E57B271c5C0b26F421741e481", // Base Mainnet
     84532: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4", // Base Sepolia
     11155420: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4", // Optimism Sepolia
 };
 
-function getUniswapV3RouterAddress(chainId: number): string {
-    const routerAddress = UNISWAP_V3_ROUTER_ADDRESSES[chainId];
+// SwapRouter02 ABI for exactInputSingle function
+const SWAP_ROUTER02_ABI = [
+    {
+        inputs: [
+            {
+                components: [
+                    { internalType: 'address', name: 'tokenIn', type: 'address' },
+                    { internalType: 'address', name: 'tokenOut', type: 'address' },
+                    { internalType: 'uint24', name: 'fee', type: 'uint24' },
+                    { internalType: 'address', name: 'recipient', type: 'address' },
+                    { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
+                    { internalType: 'uint256', name: 'amountOutMinimum', type: 'uint256' },
+                    { internalType: 'uint160', name: 'sqrtPriceLimitX96', type: 'uint160' }
+                ],
+                internalType: 'struct IV3SwapRouter.ExactInputSingleParams',
+                name: 'params',
+                type: 'tuple'
+            }
+        ],
+        name: 'exactInputSingle',
+        outputs: [{ internalType: 'uint256', name: 'amountOut', type: 'uint256' }],
+        stateMutability: 'payable',
+        type: 'function'
+    }
+];
+
+function getSwapRouter02Address(chainId: number): string {
+    const routerAddress = UNISWAP_SWAP_ROUTER02_ADDRESSES[chainId];
     if (!routerAddress) {
-        throw new Error(`Uniswap V3 Router not available on chain ${chainId}`);
+        throw new Error(`Uniswap SwapRouter02 not available on chain ${chainId}`);
     }
     return routerAddress;
 }
@@ -42,27 +86,26 @@ function getChainConfig(chainName: string){
 }
 
 const TOKEN_ADDRESS_TO_SYMBOL: { [chainId: number]: { [address: string]: string } } = {
-    11155111: { // Ethereum
+    11155111: { // Ethereum Sepolia
         '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238': 'USDC',
         '0xdAC17F958D2ee523a2206206994597C13D831ec7': 'USDT',
     },
-    80002: { // Polygon
+    80002: { // Polygon Amoy
         '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582': 'USDC',
         '0xc2132D05D31c914a87C6611C10748AEb04B58e8F': 'USDT',
     },
-    421614: { // Arbitrum
+    421614: { // Arbitrum Sepolia
         '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d': 'USDC',
         '0xc2132D05D31c914a87C6611C10748AEb04B58e8F': 'USDT',
     },
-    84532: { // Base
+    84532: { // Base Sepolia
         '0x036CbD53842c5426634e7929541eC2318f3dCF7e': 'USDC',
         '0xdAC17F958D2ee523a2206206994597C13D831ec7': 'USDT',
     },
-    11155120: { // Optimism
+    11155420: { // Optimism Sepolia
         '0x5fd84259d66Cd46123540766Be93DFE6D43130D7': 'USDC',
         '0xc2132D05D31c914a87C6611C10748AEb04B58e8F': 'USDT',
     },
-    
 };
 
 // Stable coin decimals mapping
@@ -188,7 +231,6 @@ export async function processEndedAuctions() {
             const bids = getBids(intentId);
             if (bids.length === 0) {
                 console.log("   - No bids found. Returning NFT to seller...");
-                // Return NFT to seller if no bids
                 try {
                     const cancelTx = await auctionHub.connect(keeperWallet).cancelAuction(intentId);
                     await cancelTx.wait();
@@ -232,7 +274,7 @@ export async function processEndedAuctions() {
                 console.error("   - Failed to finalize auction:", error);
             }
 
-            await settleCrossChainAuction( intentId, auction, winner, bids, auctionData.sourceChain);
+            await settleCrossChainAuction(intentId, auction, winner, bids, auctionData.sourceChain);
 
             console.log(`   - Cross-chain settlement initiated for auction ${intentId.slice(0, 10)}...`);
         } catch (error) {
@@ -266,15 +308,8 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         await releaseTx.wait();
         console.log(`   - Winning bid released. Tx: ${releaseTx.hash}`);
 
-        // Initialize Nexus SDK if not already initialized
-        if (!nexusSDK.isInitialized()) {
-            const keeperWallet = new ethers.Wallet(CONFIG.keeperPrivateKey, sourceProvider);
-            const keeperProvider = keeperWallet.provider;
-            if (!keeperProvider) {
-                throw new Error("Failed to get provider from wallet");
-            }
-            await nexusSDK.initialize(keeperProvider as any);
-        }
+        // Get initialized Nexus SDK
+        const nexusSDK = await getNexusSDK();
 
         const winnerTokenAddress = winner.token;
         const requiredTokenAddress = auction.preferredToken || auction.preferdToken;
@@ -301,15 +336,15 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
                 chainId: targetChainConfig.id,
                 recipient: auction.seller,
                 sourceChains: [sourceChainConfig.id],
-            }as TransferParams);
+            } as TransferParams);
 
             console.log(`   - Bridge transaction successful: ${bridgeResult}`);
         } else if (areEquivalentStableCoins(winnerTokenSymbol, requiredTokenSymbol)) {
-            console.log(`   - Tokens are equivalent stable coins (${winnerTokenSymbol} ≈ ${requiredTokenSymbol}). Using optimized stable coin swap...`);
+            console.log(`   - Tokens are equivalent stable coins (${winnerTokenSymbol} ≈ ${requiredTokenSymbol}). Using optimized stable coin swap via SwapRouter02...`);
             
             // For stable coin swaps, use the lowest fee tier (0.05%) for better rates
-            const uniswapRouterAddress = getUniswapV3RouterAddress(targetChainConfig.id);
-            console.log(`   - Using Uniswap V3 Router at ${uniswapRouterAddress} with 0.05% fee tier for stable coin pair`);
+            const swapRouter02Address = getSwapRouter02Address(targetChainConfig.id);
+            console.log(`   - Using Uniswap SwapRouter02 at ${swapRouter02Address} with 0.05% fee tier for stable coin pair`);
             
             // Calculate minimum amount out with 0.5% slippage for stable coins
             const winnerDecimals = getTokenDecimals(winnerTokenSymbol);
@@ -322,8 +357,8 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
                 toChainId: targetChainConfig.id,
                 sourceChains: [sourceChainConfig.id],
                 execute: {
-                    contractAddress: uniswapRouterAddress,
-                    contractAbi: UNISWAP_v3_SWAP_ABI,
+                    contractAddress: swapRouter02Address,
+                    contractAbi: SWAP_ROUTER02_ABI,
                     functionName: 'exactInputSingle',
                     buildFunctionParams: (
                         token: any,
@@ -336,7 +371,6 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
                             tokenOut: requiredTokenAddress,
                             fee: 500, // 0.05% fee tier for stable coin pairs
                             recipient: auction.seller,
-                            deadline: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
                             amountIn: amount,
                             amountOutMinimum: amountOutMinimum.toString(),
                             sqrtPriceLimitX96: 0 // No price limit for stable coins
@@ -358,9 +392,9 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         } else {
             // This case should not occur if we're only using stable coins, but keeping for safety
             console.warn(`   - Warning: Non-stable coin detected (${winnerTokenSymbol} -> ${requiredTokenSymbol}). This may result in high slippage and fees!`);
-            console.log(`   - Using standard bridge + swap with higher fee tier...`);
+            console.log(`   - Using standard bridge + swap with higher fee tier via SwapRouter02...`);
             
-            const uniswapRouterAddress = getUniswapV3RouterAddress(targetChainConfig.id);
+            const swapRouter02Address = getSwapRouter02Address(targetChainConfig.id);
             
             const bridgeAndExecuteResult: BridgeAndExecuteResult = await nexusSDK.bridgeAndExecute({
                 token: winnerTokenSymbol,
@@ -368,8 +402,8 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
                 toChainId: targetChainConfig.id,
                 sourceChains: [sourceChainConfig.id],
                 execute: {
-                    contractAddress: uniswapRouterAddress,
-                    contractAbi: UNISWAP_v3_SWAP_ABI,
+                    contractAddress: swapRouter02Address,
+                    contractAbi: SWAP_ROUTER02_ABI,
                     functionName: 'exactInputSingle',
                     buildFunctionParams: (
                         token: any,
@@ -382,7 +416,6 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
                             tokenOut: requiredTokenAddress,
                             fee: 3000, // 0.3% fee tier for non-stable pairs
                             recipient: auction.seller,
-                            deadline: Math.floor(Date.now() / 1000) + 3600,
                             amountIn: amount,
                             amountOutMinimum: 0, // Accept any amount for non-stable pairs (risky but necessary)
                             sqrtPriceLimitX96: 0
@@ -449,5 +482,15 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
     } catch (error) {
         console.error(`   - Error in cross-chain settlement for auction ${intentId.slice(0, 10)}...:`, error);
         throw error;
+    }
+}
+
+// Export function to pre-initialize Nexus SDK (optional)
+export async function initializeNexusSDK() {
+    try {
+        await getNexusSDK();
+        console.log('[✓] Nexus SDK pre-initialized for keeper');
+    } catch (error) {
+        console.error('[✗] Failed to pre-initialize Nexus SDK:', error);
     }
 }

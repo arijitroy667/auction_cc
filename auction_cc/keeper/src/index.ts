@@ -1,4 +1,11 @@
-import { startEventListeners, getAllAuctions, getAllBids } from './event-listner';
+import dotenv from 'dotenv';
+dotenv.config();
+
+console.log('🚀 Starting Auction Keeper...');
+console.log('📁 Working directory:', process.cwd());
+console.log('🔧 Node environment:', process.env.NODE_ENV || 'development');
+
+import { startEventListeners, getAllAuctions, getAllBids, restartEventListeners } from './event-listner';
 import { processEndedAuctions } from './auction-processor';
 import { CONFIG } from './config';
 import express, { Request, Response } from 'express';
@@ -10,14 +17,40 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Initialize event listeners once (only in development or when needed)
-let listenersInitialized = false;
+// Event listeners management
+let eventListenerInterval: NodeJS.Timeout | null = null;
+let auctionProcessingInterval: NodeJS.Timeout | null = null;
 
-function initializeListenersOnce() {
-    if (!listenersInitialized && process.env.NODE_ENV !== 'production') {
-        startEventListeners();
-        listenersInitialized = true;
-    }
+// Initialize event listeners immediately and set up restart interval
+function initializeEventMonitoring() {
+    console.log('🔄 Initializing event monitoring...');
+    
+    // Start event listeners immediately
+    startEventListeners();
+    
+    // Set up interval to restart event listeners every minute for fresh connections
+    eventListenerInterval = setInterval(() => {
+        console.log('🔄 Restarting event listeners for fresh connections...');
+        restartEventListeners();
+    }, 60000); // 1 minute interval
+    
+    console.log('✅ Event monitoring initialized with 1-minute refresh interval');
+}
+
+// Initialize auction processing
+function initializeAuctionProcessing() {
+    console.log('⏰ Initializing auction processing...');
+    
+    // Process auctions every 2 minutes
+    auctionProcessingInterval = setInterval(async () => {
+        try {
+            await processEndedAuctions();
+        } catch (error) {
+            console.error('❌ Error in periodic auction processing:', error);
+        }
+    }, CONFIG.processingInterval);
+    
+    console.log(`✅ Auction processing initialized with ${CONFIG.processingInterval}ms interval`);
 }
 
 // Health check endpoint
@@ -26,14 +59,15 @@ app.get('/health', (req, res) => {
         status: 'healthy', 
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
-        environment: process.env.NODE_ENV || 'development'
+        environment: process.env.NODE_ENV || 'development',
+        eventListening: !!eventListenerInterval,
+        auctionProcessing: !!auctionProcessingInterval
     });
 });
 
 // Get all auctions
 app.get('/api/auctions', (req, res) => {
     try {
-        initializeListenersOnce();
         const auctions = getAllAuctions();
         const auctionsArray = Array.from(auctions.entries()).map(([intentId, auction]) => ({
             intentId,
@@ -43,7 +77,8 @@ app.get('/api/auctions', (req, res) => {
         res.json({
             success: true,
             count: auctionsArray.length,
-            data: auctionsArray
+            data: auctionsArray,
+            timestamp: new Date().toISOString()
         });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -58,7 +93,6 @@ app.get('/api/auctions', (req, res) => {
 // Get specific auction by intentId
 app.get('/api/auctions/:intentId', (req, res) => {
     try {
-        initializeListenersOnce();
         const { intentId } = req.params;
         const auctions = getAllAuctions();
         const auction = auctions.get(intentId);
@@ -75,7 +109,8 @@ app.get('/api/auctions/:intentId', (req, res) => {
             data: {
                 intentId,
                 ...auction
-            }
+            },
+            timestamp: new Date().toISOString()
         });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -90,7 +125,6 @@ app.get('/api/auctions/:intentId', (req, res) => {
 // Get all bids
 app.get('/api/bids', (req, res) => {
     try {
-        initializeListenersOnce();
         const allBids = getAllBids();
         const bidsArray = Array.from(allBids.entries()).map(([intentId, bids]) => ({
             intentId,
@@ -100,7 +134,8 @@ app.get('/api/bids', (req, res) => {
         res.json({
             success: true,
             count: bidsArray.length,
-            data: bidsArray
+            data: bidsArray,
+            timestamp: new Date().toISOString()
         });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -115,7 +150,6 @@ app.get('/api/bids', (req, res) => {
 // Get bids for specific auction
 app.get('/api/bids/:intentId', (req, res) => {
     try {
-        initializeListenersOnce();
         const { intentId } = req.params;
         const allBids = getAllBids();
         const bids = allBids.get(intentId) || [];
@@ -124,35 +158,14 @@ app.get('/api/bids/:intentId', (req, res) => {
             success: true,
             intentId,
             count: bids.length,
-            data: bids
+            data: bids,
+            timestamp: new Date().toISOString()
         });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         res.status(500).json({
             success: false,
             error: 'Failed to fetch bids for auction',
-            details: errorMessage
-        });
-    }
-});
-
-// Manually trigger auction processing
-app.post('/api/process-auctions', async (req, res) => {
-    try {
-        console.log('[API] Manual auction processing triggered');
-        await processEndedAuctions();
-        
-        res.json({
-            success: true,
-            message: 'Auction processing completed',
-            timestamp: new Date().toISOString()
-        });
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('[API] Manual auction processing failed:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Failed to process auctions',
             details: errorMessage
         });
     }
@@ -174,7 +187,9 @@ app.get('/api/config', (req, res) => {
                 ])
             ),
             processingInterval: CONFIG.processingInterval,
-            environment: process.env.NODE_ENV || 'development'
+            environment: process.env.NODE_ENV || 'development',
+            eventRefreshInterval: 60000, // 1 minute
+            lastUpdated: new Date().toISOString()
         };
         
         res.json({
@@ -191,48 +206,6 @@ app.get('/api/config', (req, res) => {
     }
 });
 
-// Get system stats
-app.get('/api/stats', (req, res) => {
-    try {
-        initializeListenersOnce();
-        const auctions = getAllAuctions();
-        const allBids = getAllBids();
-        
-        const stats = {
-            totalAuctions: auctions.size,
-            totalBids: Array.from(allBids.values()).reduce((sum, bids) => sum + bids.length, 0),
-            auctionsByChain: {} as { [key: string]: number },
-            bidsByChain: {} as { [key: string]: number }
-        };
-        
-        // Count auctions by chain
-        for (const auction of auctions.values()) {
-            const chain = auction.sourceChain as string;
-            stats.auctionsByChain[chain] = (stats.auctionsByChain[chain] || 0) + 1;
-        }
-        
-        // Count bids by chain
-        for (const bids of allBids.values()) {
-            for (const bid of bids) {
-                const chain = bid.sourceChain as string;
-                stats.bidsByChain[chain] = (stats.bidsByChain[chain] || 0) + 1;
-            }
-        }
-        
-        res.json({
-            success: true,
-            data: stats
-        });
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        res.status(500).json({
-            success: false,
-            error: 'Failed to fetch stats',
-            details: errorMessage
-        });
-    }
-});
-
 // Error handling middleware
 app.use((error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
     console.error('Express error:', error);
@@ -243,7 +216,7 @@ app.use((error: Error, req: express.Request, res: express.Response, next: expres
     });
 });
 
-// 404 handler - Express 5 compatible
+// 404 handler
 app.use((req, res) => {
     res.status(404).json({
         success: false,
@@ -251,35 +224,48 @@ app.use((req, res) => {
     });
 });
 
+// Graceful shutdown function
+function gracefulShutdown() {
+    console.log('\n🛑 Shutting down keeper...');
+    
+    if (eventListenerInterval) {
+        clearInterval(eventListenerInterval);
+        console.log('✅ Event listener interval cleared');
+    }
+    
+    if (auctionProcessingInterval) {
+        clearInterval(auctionProcessingInterval);
+        console.log('✅ Auction processing interval cleared');
+    }
+    
+    process.exit(0);
+}
+
+// Initialize monitoring and processing for all environments
+console.log('🚀 Starting keeper in production mode...');
+initializeEventMonitoring();
+initializeAuctionProcessing();
+
 // Export the Express app for Vercel
 export default app;
 
-// For local development
-if (process.env.NODE_ENV !== 'production') {
-    const PORT = process.env.PORT || 3001;
-    
-    // Initialize event listeners for local development
-    startEventListeners();
-    
-    // Start periodic auction processing for local development
-    setInterval(async () => {
-        try {
-            await processEndedAuctions();
-        } catch (error) {
-            console.error('❌ Error in periodic auction processing:', error);
-        }
-    }, CONFIG.processingInterval);
-    
-    app.listen(PORT, () => {
-        console.log(`🌐 Keeper API server running on port ${PORT}`);
-        console.log(`📡 Health check: http://localhost:${PORT}/health`);
-        console.log(`📋 API endpoints:`);
-        console.log(`   GET  /api/auctions           - Get all auctions`);
-        console.log(`   GET  /api/auctions/:id       - Get specific auction`);
-        console.log(`   GET  /api/bids               - Get all bids`);
-        console.log(`   GET  /api/bids/:id           - Get bids for auction`);
-        console.log(`   POST /api/process-auctions   - Manually trigger processing`);
-        console.log(`   GET  /api/config             - Get keeper configuration`);
-        console.log(`   GET  /api/stats              - Get system statistics`);
-    });
-}
+// For local development and production
+const PORT = process.env.PORT || 3001;
+
+app.listen(PORT, () => {
+    console.log(`🌐 Keeper API server running on port ${PORT}`);
+    console.log(`📡 Health check: http://localhost:${PORT}/health`);
+    console.log(`📋 Available API endpoints:`);
+    console.log(`   GET  /health                 - Health check`);
+    console.log(`   GET  /api/auctions           - Get all auctions`);
+    console.log(`   GET  /api/auctions/:id       - Get specific auction`);
+    console.log(`   GET  /api/bids               - Get all bids`);
+    console.log(`   GET  /api/bids/:id           - Get bids for auction`);
+    console.log(`   GET  /api/config             - Get keeper configuration`);
+    console.log(`🔄 Event listeners refresh every 60 seconds`);
+    console.log(`⏰ Auction processing every ${CONFIG.processingInterval}ms`);
+});
+
+// Handle shutdown signals
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
