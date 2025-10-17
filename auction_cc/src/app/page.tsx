@@ -5,8 +5,8 @@ import { useAccount } from "wagmi";
 import { isInitialized } from "@/lib/nexus/nexusClient";
 import { result } from "@/components/unified_balance/fetch-unified-balance";
 import Navbar from "@/components/navbar";
-import Link from "next/link";
 import AuctionTestPanel from "@/components/auction-test-panel";
+import Link from "next/link";
 
 export default function Page() {
   const { isConnected } = useAccount();
@@ -108,7 +108,7 @@ export default function Page() {
               <div className="backdrop-blur-sm bg-white/5 rounded-2xl p-6 border border-white/10">
                 <div className="text-4xl mb-4">🌐</div>
                 <h3 className="text-xl font-semibold text-white mb-2">Cross-Chain</h3>
-                <p className="text-zinc-400">Bid on NFTs across Ethereum, Polygon, Arbitrum, and Base networks seamlessly.</p>
+                <p className="text-zinc-400">Bid on NFTs across Ethereum, Arbitrum, Optimism, and Base networks seamlessly.</p>
               </div>
               <div className="backdrop-blur-sm bg-white/5 rounded-2xl p-6 border border-white/10">
                 <div className="text-4xl mb-4">⚡</div>
@@ -143,11 +143,11 @@ export default function Page() {
                 <p className="text-green-300/80">Your wallet is connected and Nexus is initialized. Start exploring auctions!</p>
               </div>
             )}
-          </section>
 
-          {/* Auction Testing Section */}
-          <section className="max-w-4xl mx-auto px-4 py-16">
-            <AuctionTestPanel />
+            {/* Test Panel - Always show when connected */}
+            {isConnected && (
+              <AuctionTestPanel />
+            )}
           </section>
         </main>
       </div>

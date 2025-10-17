@@ -356,7 +356,7 @@ export default function CreateAuctionPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 mt-1">•</span>
-                  Only USDT, USDC, and DAI tokens are supported for auctions
+                  Only USDT and USDC tokens are supported for auctions
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 mt-1">•</span>

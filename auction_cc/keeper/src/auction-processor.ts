@@ -5,7 +5,7 @@ import { TransferParams,
     ExecuteParams,
     ExecuteResult} from '@avail-project/nexus-core';
 import {ethers} from "ethers";
-import {CONFIG, getTokenAddress, isSupportedToken, getTokenSymbolByAddress} from "./config";
+import {CONFIG} from "./config";
 import { getAllAuctions,getBids } from "./event-listner";
 import AUCTION_HUB_ABI from "../src/ABI/AUCTION_HUB_ABI.json";
 import BID_MANAGER_ABI from "../src/ABI/BID_MANAGER_ABI.json";
@@ -41,7 +41,6 @@ async function getNexusSDK(): Promise<any> {
 // Uniswap SwapRouter02 addresses for different chains
 const UNISWAP_SWAP_ROUTER02_ADDRESSES: { [chainId: number]: string } = {
     11155111: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Ethereum Sepolia
-    80002: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Polygon Amoy
     421614: "0x101F443B4d1b059569D643917553c771E1b9663E", // Arbitrum Sepolia
     84532: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4", // Base Sepolia
 };
@@ -88,21 +87,14 @@ const TOKEN_ADDRESS_TO_SYMBOL: { [chainId: number]: { [address: string]: string 
     11155111: { // Ethereum Sepolia
         '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238': 'USDC',
         '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06': 'USDT',
-        '0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6': 'DAI',
-    },
-    80002: { // Polygon Amoy
-        '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582': 'USDC',
-        '0xc2132D05D31c914a87C6611C10748AEb04B58e8F': 'USDT',
     },
     421614: { // Arbitrum Sepolia
         '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d': 'USDC',
         '0xb1D4538B4571d411F07960EF2838Ce337FE1E80E': 'USDT',
-        '0x980B62Da83eFf3D4576C647993b0c1D7faf17c73': 'DAI',
     },
     84532: { // Base Sepolia
         '0x036CbD53842c5426634e7929541eC2318f3dCF7e': 'USDC',
         '0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9': 'USDT',
-        '0x7683022d84F726A96c4A6611CD31DBD5B91be7AA': 'DAI',
     },
     11155420: { // Optimism Sepolia
         '0x5fd84259d66Cd46123540766Be93DFE6D43130D7': 'USDC',
@@ -114,12 +106,11 @@ const TOKEN_ADDRESS_TO_SYMBOL: { [chainId: number]: { [address: string]: string 
 const STABLE_COIN_DECIMALS: { [symbol: string]: number } = {
     'USDC': 6,
     'USDT': 6,
-    'DAI': 18,
     'USDC.e': 6, // Bridged USDC on some chains
 };
 
 // Stable coins that can be considered equivalent (1:1 ratio)
-const EQUIVALENT_STABLE_COINS = ['USDC', 'USDT', 'DAI', 'USDC.e'];
+const EQUIVALENT_STABLE_COINS = ['USDC', 'USDT', 'USDC.e'];
 
 function getTokenSymbol(tokenAddress: string, chainId: number): string {
     const chainTokens = TOKEN_ADDRESS_TO_SYMBOL[chainId];

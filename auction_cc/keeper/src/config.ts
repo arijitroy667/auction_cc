@@ -9,10 +9,9 @@ console.log('Loading configuration...');
 const requiredEnvVars = [
   'KEEPER_PRIVATE_KEY',
   'ETHEREUM_RPC_URL',
-  'POLYGON_RPC_URL',
-  'ARBITRUM_RPC_URL',
-  'BASE_RPC_URL',
-  'OPTIMISM_RPC_URL'
+  'ARBITRUM_SEPOLIA_RPC_URL',
+  'BASE_SEPOLIA_RPC_URL',
+  'OPTIMISM_SEPOLIA_RPC_URL'
 ];
 
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
@@ -29,36 +28,29 @@ export const CONFIG = {
       id: 11155111,
       name: "ethereum",
       rpcUrl: process.env.ETHEREUM_RPC_URL!,
-      auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
-      bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387",
-    },
-    polygonMumbai: {
-      id: 80001,
-      name: "polygonMumbai",
-      rpcUrl: process.env.POLYGON_MUMBAI_RPC_URL!,
-      auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
-      bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387",
+      auctionHubAddress: "0x003b0C383aFF1C5a08073fB8e5e704818313Ee95",
+      bidManagerAddress: "0x8CDcA61d24949ecE0402e38b0F3F55929F697342",
     },
     arbitrumSepolia: {
       id: 421614,
       name: "arbitrumSepolia",
       rpcUrl: process.env.ARBITRUM_SEPOLIA_RPC_URL!,
-      auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
-      bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387",
+      auctionHubAddress: "0x003b0C383aFF1C5a08073fB8e5e704818313Ee95",
+      bidManagerAddress: "0x8CDcA61d24949ecE0402e38b0F3F55929F697342",
     },
     base: {
-      id: 8453,
+      id: 84532,
       name: "base",
-      rpcUrl: process.env.BASE_RPC_URL!,
-      auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
-      bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387",
+      rpcUrl: process.env.BASE_SEPOLIA_RPC_URL!,
+      auctionHubAddress: "0x003b0C383aFF1C5a08073fB8e5e704818313Ee95",
+      bidManagerAddress: "0x8CDcA61d24949ecE0402e38b0F3F55929F697342",
     },
     optimism:{
       id: 11155420,
       name: "optimism",
-      rpcUrl: process.env.OPTIMISM_RPC_URL!,
-      auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
-      bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387",
+      rpcUrl: process.env.OPTIMISM_SEPOLIA_RPC_URL!,
+      auctionHubAddress: "0x003b0C383aFF1C5a08073fB8e5e704818313Ee95",
+      bidManagerAddress: "0x8CDcA61d24949ecE0402e38b0F3F55929F697342",
     }
   },
   // Process auctions every 2 minutes (event listeners refresh every 1 minute)

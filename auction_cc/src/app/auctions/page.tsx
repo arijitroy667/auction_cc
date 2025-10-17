@@ -48,10 +48,10 @@ export default function AuctionsPage() {
           {
             id: "2", 
             title: "Digital Dreams #567",
-            currentBid: "150 MATIC",
+            currentBid: "150 USDC",
             timeLeft: "5h 12m",
             image: "/placeholder-nft.jpg",
-            chain: "Polygon"
+            chain: "Arbitrum"
           }
         ]);
         setLoading(false);
@@ -95,8 +95,8 @@ export default function AuctionsPage() {
               <select className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white backdrop-blur-sm">
                 <option value="">All Chains</option>
                 <option value="ethereum">Ethereum</option>
-                <option value="polygon">Polygon</option>
                 <option value="arbitrum">Arbitrum</option>
+                <option value="optimism">Optimism</option>
                 <option value="base">Base</option>
               </select>
               <select className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white backdrop-blur-sm">
