@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import ConnectWalletButton from "../components/connect-button";
 import {
   initializeWithProvider,
@@ -8,16 +10,24 @@ import { result as fetchUnifiedBalance } from "../components/unified_balance/fet
 import { useAccount } from "wagmi";
 
 interface NavbarProps {
-  activeTab?: 'auctions' | 'create';
-  onTabChange?: (tab: 'auctions' | 'create') => void;
+  activeTab?: 'home' | 'auctions' | 'create';
+  onTabChange?: (tab: 'home' | 'auctions' | 'create') => void;
 }
 
-export default function Navbar({ activeTab = 'auctions', onTabChange }: NavbarProps) {
+export default function Navbar({ activeTab = 'home', onTabChange }: NavbarProps) {
   const { isConnected } = useAccount();
+  const pathname = usePathname();
   const [balance, setBalance] = useState<string | null>(null);
   const [nexusInitialized, setNexusInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+
+  // Determine active tab based on pathname
+  const getActiveTab = () => {
+    if (pathname === '/auctions') return 'auctions';
+    if (pathname === '/create') return 'create';
+    return 'home';
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -96,11 +106,47 @@ export default function Navbar({ activeTab = 'auctions', onTabChange }: NavbarPr
       }`}>
         <div className="max-w-screen-2xl mx-auto px-6 lg:px-12">
           <div className="flex items-center justify-between h-16">
-            {/* Left - Brand */}
-            <div className="flex-shrink-0">
-              <h1 className="text-white text-xl font-bold tracking-tight">
-                Auction.cc
-              </h1>
+            {/* Left - Brand and Navigation */}
+            <div className="flex items-center gap-8">
+              <Link href="/" className="flex-shrink-0">
+                <h1 className="text-white text-xl font-bold tracking-tight hover:text-blue-400 transition-colors">
+                  Auction.cc
+                </h1>
+              </Link>
+              
+              {/* Navigation Links */}
+              <div className="hidden md:flex items-center gap-6">
+                <Link 
+                  href="/"
+                  className={`text-sm font-medium transition-colors ${
+                    getActiveTab() === 'home' 
+                      ? 'text-white' 
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Home
+                </Link>
+                <Link 
+                  href="/auctions"
+                  className={`text-sm font-medium transition-colors ${
+                    getActiveTab() === 'auctions' 
+                      ? 'text-white' 
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Auctions
+                </Link>
+                <Link 
+                  href="/create"
+                  className={`text-sm font-medium transition-colors ${
+                    getActiveTab() === 'create' 
+                      ? 'text-white' 
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Create
+                </Link>
+              </div>
             </div>
 
             {/* Right - Wallet Controls */}

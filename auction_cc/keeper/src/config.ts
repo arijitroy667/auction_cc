@@ -7,29 +7,29 @@ export const CONFIG = {
       id: 1,
       name: "ethereum",
       rpcUrl: process.env.ETHEREUM_RPC_URL!,
-      auctionHubAddress: "0xYourAuctionHubAddressOnEthereum",
-      bidManagerAddress: "0xYourBidManagerAddressOnEthereum", // Added this
+      auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
+      bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387", // Added this
     },
     polygon: {
       id: 137,
       name: "polygon",
       rpcUrl: process.env.POLYGON_RPC_URL!,
-      auctionHubAddress: "0xYourAuctionHubAddressOnPolygon",
-      bidManagerAddress: "0xYourBidManagerAddressOnPolygon",
+      auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
+      bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387",
     },
     arbitrum: {
       id: 42161,
       name: "arbitrum",
       rpcUrl: process.env.ARBITRUM_RPC_URL!,
-      auctionHubAddress: "0xYourAuctionHubAddressOnArbitrum",
-      bidManagerAddress: "0xYourBidManagerAddressOnArbitrum",
+      auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
+      bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387",
     },
     base: {
       id: 8453,
       name: "base",
       rpcUrl: process.env.BASE_RPC_URL!,
-        auctionHubAddress: "0xYourAuctionHubAddressOnBase",
-      bidManagerAddress: "0xYourBidManagerAddressOnBase",
+        auctionHubAddress: "0x09690941A1Bef2822DC5814a49aFAb14168aC0B2",
+      bidManagerAddress: "0xc1d848E9892dDB0264719c9bd1628d663575e387",
     },
     // Add other chains here
   },
