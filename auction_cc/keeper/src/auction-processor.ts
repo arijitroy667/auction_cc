@@ -7,7 +7,7 @@ import { TransferParams,
     ExecuteResult,
     NexusSDK } from '@avail-project/nexus-core';
 import {ethers} from "ethers";
-import {CONFIG} from "./config";
+import {CONFIG, getTokenAddress, isSupportedToken, getTokenSymbolByAddress} from "./config";
 import { getAllAuctions,getBids } from "./event-listner";
 import AUCTION_HUB_ABI from "../src/ABI/AUCTION_HUB_ABI.json";
 import BID_MANAGER_ABI from "../src/ABI/BID_MANAGER_ABI.json";
@@ -16,17 +16,12 @@ import UNISWAP_v3_SWAP_ABI from "../src/ABI/UNISWAP_V3_SWAP_ABI.json";
 // Initialize Nexus SDK
 const nexusSDK = new NexusSDK({ network: 'testnet' });
 
-// Uniswap V3 SwapRouter addresses for different chains
+// Uniswap V3 SwapRouter addresses for different chains (testnets only)
 const UNISWAP_V3_ROUTER_ADDRESSES: { [chainId: number]: string } = {
-    1: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Ethereum Mainnet
     11155111: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Ethereum Sepolia
-    137: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Polygon Mainnet
-    80002: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Polygon Amoy
-    42161: "0xE592427A0AEce92De3Edee1F18E0157C05861564", // Arbitrum One
+    80001: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Polygon Mumbai
     421614: "0x101F443B4d1b059569D643917553c771E1b9663E", // Arbitrum Sepolia
-    8453: "0x2626664c2603336E57B271c5C0b26F421741e481", // Base Mainnet
     84532: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4", // Base Sepolia
-    11155420: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4", // Optimism Sepolia
 };
 
 function getUniswapV3RouterAddress(chainId: number): string {
@@ -42,21 +37,25 @@ function getChainConfig(chainName: string){
 }
 
 const TOKEN_ADDRESS_TO_SYMBOL: { [chainId: number]: { [address: string]: string } } = {
-    11155111: { // Ethereum
+    11155111: { // Sepolia Testnet
         '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238': 'USDC',
-        '0xdAC17F958D2ee523a2206206994597C13D831ec7': 'USDT',
+        '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06': 'USDT',
+        '0x3e622317f8C93f7328350cF0B56d9eD4C620C5d6': 'DAI',
     },
-    80002: { // Polygon
-        '0x41E94Eb019C0762f9Bfcf9Fb1E58725BfB0e7582': 'USDC',
-        '0xc2132D05D31c914a87C6611C10748AEb04B58e8F': 'USDT',
+    80001: { // Polygon Mumbai Testnet
+        '0x742d35Cc6634C0532925a3b8D355Bd28442ecA8a': 'USDC',
+        '0xBD21A10F619BE90d6066c941b04e4B3304b9d19c': 'USDT',
+        '0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F': 'DAI',
     },
-    421614: { // Arbitrum
+    421614: { // Arbitrum Sepolia Testnet
         '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d': 'USDC',
-        '0xc2132D05D31c914a87C6611C10748AEb04B58e8F': 'USDT',
+        '0xb1D4538B4571d411F07960EF2838Ce337FE1E80E': 'USDT',
+        '0x980B62Da83eFf3D4576C647993b0c1D7faf17c73': 'DAI',
     },
-    84532: { // Base
+    84532: { // Base Sepolia Testnet
         '0x036CbD53842c5426634e7929541eC2318f3dCF7e': 'USDC',
-        '0xdAC17F958D2ee523a2206206994597C13D831ec7': 'USDT',
+        '0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9': 'USDT',
+        '0x7683022d84F726A96c4A6611CD31DBD5B91be7AA': 'DAI',
     },
     11155120: { // Optimism
         '0x5fd84259d66Cd46123540766Be93DFE6D43130D7': 'USDC',

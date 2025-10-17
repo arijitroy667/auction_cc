@@ -1,14 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useWalletClient } from "wagmi";
 import { isInitialized } from "@/lib/nexus/nexusClient";
 import Navbar from "@/components/navbar";
 import Link from "next/link";
+import { ethers } from "ethers";
+import { getAuctionHubContract } from "@/lib/auctionHub";
+import { SUPPORTED_TOKENS, CHAIN_NAMES, TOKEN_ADDRESSES, AUCTION_HUB_ADDRESS, type SupportedToken } from "@/lib/constants";
 
 export default function CreateAuctionPage() {
   const { isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
   const [initialized, setInitialized] = useState(isInitialized());
+  const [isCreating, setIsCreating] = useState(false);
+  const [isApproving, setIsApproving] = useState(false);
   
   // Auction form state
   const [auctionForm, setAuctionForm] = useState({
@@ -17,7 +23,7 @@ export default function CreateAuctionPage() {
     startingPrice: '',
     reservePrice: '',
     durationHours: '',
-    preferredToken: '',
+    preferredToken: '' as SupportedToken | '',
     preferredChain: '1'
   });
 
@@ -35,35 +41,143 @@ export default function CreateAuctionPage() {
     return () => clearInterval(interval);
   }, [initialized]);
 
+  const handleApproveNFT = async () => {
+    if (!isConnected || !auctionForm.nftContract || !walletClient) {
+      alert('Please connect your wallet and enter NFT contract address first');
+      return;
+    }
+
+    setIsApproving(true);
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      
+      // ERC721 ABI for approve and setApprovalForAll
+      const erc721ABI = [
+        "function setApprovalForAll(address operator, bool approved)",
+        "function isApprovedForAll(address owner, address operator) view returns (bool)",
+        "function ownerOf(uint256 tokenId) view returns (address)",
+        "function approve(address to, uint256 tokenId)"
+      ];
+      
+      const nftContract = new ethers.Contract(auctionForm.nftContract, erc721ABI, signer);
+      const userAddress = await signer.getAddress();
+      
+      // Check if already approved for all
+      const isApproved = await nftContract.isApprovedForAll(userAddress, AUCTION_HUB_ADDRESS);
+      
+      if (isApproved) {
+        alert('NFT contract is already approved for the AuctionHub');
+        return;
+      }
+      
+      // Approve the auction contract to transfer all NFTs
+      const tx = await nftContract.setApprovalForAll(AUCTION_HUB_ADDRESS, true);
+      await tx.wait();
+      
+      alert('NFT contract approved successfully! You can now create auctions.');
+      
+    } catch (error: unknown) {
+      console.error('Error approving NFT:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to approve NFT: ${errorMessage}`);
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
   const handleCreateAuction = async () => {
     if (!isConnected || !initialized) {
       alert('Please connect your wallet and initialize Nexus first');
       return;
     }
 
-    if (!auctionForm.nftContract || !auctionForm.tokenId || !auctionForm.startingPrice || !auctionForm.durationHours) {
+    if (!auctionForm.nftContract || !auctionForm.tokenId || !auctionForm.startingPrice || !auctionForm.reservePrice || !auctionForm.durationHours || !auctionForm.preferredToken) {
       alert('Please fill in all required fields');
       return;
     }
 
+    if (!walletClient) {
+      alert('Wallet client not available');
+      return;
+    }
+
+    setIsCreating(true);
+
     try {
+      // Create ethers signer from wallet client
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const userAddress = await signer.getAddress();
+      
+      // Check if the NFT is approved for the auction contract
+      const erc721ABI = [
+        "function isApprovedForAll(address owner, address operator) view returns (bool)",
+        "function ownerOf(uint256 tokenId) view returns (address)"
+      ];
+      
+      const nftContract = new ethers.Contract(auctionForm.nftContract, erc721ABI, signer);
+      
+      // Check if user owns the NFT
+      try {
+        const owner = await nftContract.ownerOf(auctionForm.tokenId);
+        if (owner.toLowerCase() !== userAddress.toLowerCase()) {
+          alert(`You don't own this NFT. Current owner: ${owner}`);
+          return;
+        }
+      } catch (error) {
+        alert('Invalid NFT contract address or token ID');
+        return;
+      }
+      
+      // Check if the auction contract is approved
+      const isApproved = await nftContract.isApprovedForAll(userAddress, AUCTION_HUB_ADDRESS);
+      if (!isApproved) {
+        alert('Please approve the NFT contract first by clicking "Approve NFT Contract" button');
+        return;
+      }
+      
+      // Get contract instance
+      const auctionHubContract = getAuctionHubContract(signer);
+      
+      // Calculate deadline
       const deadline = Math.floor(Date.now() / 1000) + (parseInt(auctionForm.durationHours) * 3600);
       
-      console.log('Creating auction with params:', {
+      // Create auction parameters
+      const params = {
         nftContract: auctionForm.nftContract,
         tokenId: auctionForm.tokenId,
         startingPrice: auctionForm.startingPrice,
-        reservePrice: auctionForm.reservePrice || auctionForm.startingPrice,
+        reservePrice: auctionForm.reservePrice,
         deadline,
-        preferredToken: auctionForm.preferredToken,
-        preferredChain: auctionForm.preferredChain
+        preferredToken: auctionForm.preferredToken as SupportedToken,
+        preferredChain: parseInt(auctionForm.preferredChain)
+      };
+
+      console.log('Creating auction with params:', params);
+      
+      // Create the auction
+      const intentId = await auctionHubContract.createAuction(params);
+      
+      alert(`Auction created successfully! Intent ID: ${intentId}`);
+      
+      // Reset form
+      setAuctionForm({
+        nftContract: '',
+        tokenId: '',
+        startingPrice: '',
+        reservePrice: '',
+        durationHours: '',
+        preferredToken: '',
+        preferredChain: '1'
       });
       
-      alert('Auction creation functionality will be implemented with contract integration');
-      
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error creating auction:', error);
-      alert('Failed to create auction');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to create auction: ${errorMessage}`);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -123,7 +237,7 @@ export default function CreateAuctionPage() {
 
                 <div>
                   <label className="block text-white font-medium mb-2">
-                    Starting Price *
+                    Starting Price * <span className="text-blue-400 text-sm">(in USD)</span>
                   </label>
                   <input
                     type="text"
@@ -136,7 +250,7 @@ export default function CreateAuctionPage() {
 
                 <div>
                   <label className="block text-white font-medium mb-2">
-                    Reserve Price (Optional)
+                    Reserve Price <span className="text-blue-400 text-sm">(Optional, in USD)</span>
                   </label>
                   <input
                     type="text"
@@ -170,15 +284,20 @@ export default function CreateAuctionPage() {
 
                 <div>
                   <label className="block text-white font-medium mb-2">
-                    Preferred Token
+                    Preferred Token *
                   </label>
-                  <input
-                    type="text"
-                    placeholder="ETH, USDC, etc."
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 backdrop-blur-sm focus:outline-none focus:border-blue-400 transition-colors"
+                  <select
+                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white backdrop-blur-sm focus:outline-none focus:border-blue-400 transition-colors"
                     value={auctionForm.preferredToken}
-                    onChange={(e) => setAuctionForm({...auctionForm, preferredToken: e.target.value})}
-                  />
+                    onChange={(e) => setAuctionForm({...auctionForm, preferredToken: e.target.value as SupportedToken | ''})}
+                  >
+                    <option value="">Select preferred token</option>
+                    {SUPPORTED_TOKENS.map((token) => (
+                      <option key={token} value={token} className="bg-black text-white">
+                        {token}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -190,12 +309,26 @@ export default function CreateAuctionPage() {
                     value={auctionForm.preferredChain}
                     onChange={(e) => setAuctionForm({...auctionForm, preferredChain: e.target.value})}
                   >
-                    <option value="1">Ethereum</option>
-                    <option value="137">Polygon</option>
-                    <option value="42161">Arbitrum</option>
-                    <option value="8453">Base</option>
+                    {Object.entries(CHAIN_NAMES).map(([chainId, chainName]) => (
+                      <option key={chainId} value={chainId} className="bg-black text-white">
+                        {chainName}
+                      </option>
+                    ))}
                   </select>
                 </div>
+
+                {/* Token Contract Address Display */}
+                {auctionForm.preferredToken && auctionForm.preferredChain && (
+                  <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg backdrop-blur-sm">
+                    <h5 className="text-blue-300 font-medium mb-2">Token Contract Address:</h5>
+                    <p className="text-white/70 text-sm font-mono break-all">
+                      {TOKEN_ADDRESSES[parseInt(auctionForm.preferredChain) as keyof typeof TOKEN_ADDRESSES]?.[auctionForm.preferredToken as SupportedToken] || 'Unknown'}
+                    </p>
+                    <p className="text-white/50 text-xs mt-1">
+                      {auctionForm.preferredToken} on {CHAIN_NAMES[parseInt(auctionForm.preferredChain) as keyof typeof CHAIN_NAMES]}
+                    </p>
+                  </div>
+                )}
 
                 {/* NFT Preview */}
                 <div className="mt-8">
@@ -223,33 +356,78 @@ export default function CreateAuctionPage() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 mt-1">•</span>
+                  Only USDT, USDC, and DAI tokens are supported for auctions
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-400 mt-1">•</span>
                   Ensure the auction deadline is in the future
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 mt-1">•</span>
                   Connect your wallet and initialize Nexus before creating an auction
                 </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-400 mt-1">•</span>
+                  <strong className="text-white">IMPORTANT:</strong> You must click "Approve NFT Contract" before creating the auction
+                </li>
               </ul>
             </div>
 
-            {/* Create Button */}
-            <div className="mt-8 flex justify-center">
+            {/* Action Buttons */}
+            <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
+              {/* Approve Button */}
               <div className="relative inline-flex group">
                 <div className={`absolute transition-all duration-1000 opacity-70 -inset-px rounded-xl blur-lg group-hover:opacity-100 group-hover:-inset-1 group-hover:duration-200 ${
-                  isConnected && initialized 
+                  isConnected && auctionForm.nftContract && !isApproving
+                    ? 'bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500' 
+                    : 'bg-gradient-to-r from-gray-600 via-gray-500 to-gray-600'
+                }`}></div>
+                <button 
+                  onClick={handleApproveNFT}
+                  disabled={!isConnected || !auctionForm.nftContract || isApproving}
+                  className={`relative inline-flex items-center justify-center px-8 py-3 text-sm font-bold duration-200 rounded-xl border ${
+                    isConnected && auctionForm.nftContract && !isApproving
+                      ? 'text-white bg-black border-white/20 hover:bg-black/90' 
+                      : 'text-white/50 bg-black/50 border-white/10 cursor-not-allowed'
+                  }`}
+                >
+                  {isApproving ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Approving...
+                    </>
+                  ) : 'Approve NFT Contract'}
+                </button>
+              </div>
+
+              {/* Create Button */}
+              <div className="relative inline-flex group">
+                <div className={`absolute transition-all duration-1000 opacity-70 -inset-px rounded-xl blur-lg group-hover:opacity-100 group-hover:-inset-1 group-hover:duration-200 ${
+                  isConnected && initialized && !isCreating
                     ? 'bg-gradient-to-r from-white via-gray-300 to-white' 
                     : 'bg-gradient-to-r from-gray-600 via-gray-500 to-gray-600'
                 }`}></div>
                 <button 
                   onClick={handleCreateAuction}
-                  disabled={!isConnected || !initialized}
+                  disabled={!isConnected || !initialized || isCreating}
                   className={`relative inline-flex items-center justify-center px-12 py-4 text-lg font-bold duration-200 rounded-xl border ${
-                    isConnected && initialized 
+                    isConnected && initialized && !isCreating
                       ? 'text-white bg-black border-white/20 hover:bg-black/90' 
                       : 'text-white/50 bg-black/50 border-white/10 cursor-not-allowed'
                   }`}
                 >
-                  {!isConnected ? 'Connect Wallet First' : !initialized ? 'Initialize Nexus First' : 'Create Auction'}
+                  {isCreating ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Creating Auction...
+                    </>
+                  ) : !isConnected ? 'Connect Wallet First' : !initialized ? 'Initialize Nexus First' : 'Create Auction'}
                 </button>
               </div>
             </div>
