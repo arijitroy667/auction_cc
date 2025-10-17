@@ -17,6 +17,15 @@ export default function Navbar({ activeTab = 'auctions', onTabChange }: NavbarPr
   const [balance, setBalance] = useState<string | null>(null);
   const [nexusInitialized, setNexusInitialized] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Check if Nexus is already initialized on component mount
   useEffect(() => {
@@ -79,97 +88,80 @@ export default function Navbar({ activeTab = 'auctions', onTabChange }: NavbarPr
   };
 
   return (
-    <div>
-      <nav className="flex justify-between items-center px-12 py-6 bg-black border-b border-gray-800">
-        {/* Left side - Logo and Project Name */}
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center">
-            <span className="text-black font-bold text-xl">A</span>
-          </div>
-          <h1 className="text-white text-2xl font-semibold">Cross-Chain Auction</h1>
-        </div>
-
-        {/* Right side - Wallet and Balance */}
-        <div className="flex items-center gap-4">
-          {/* Nexus Init Button */}
-          {isConnected && !nexusInitialized && (
-            <button
-              className={`px-6 py-3 rounded transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 ${
-                isInitializing 
-                  ? 'bg-gray-500 text-gray-300 cursor-not-allowed' 
-                  : 'bg-purple-500 text-white hover:bg-purple-600'
-              }`}
-              onClick={handleManualNexusInit}
-              disabled={isInitializing}
-            >
-              {isInitializing ? 'Initializing...' : 'Init Nexus'}
-            </button>
-          )}
-
-          {/* Nexus Status Indicator */}
-          {isConnected && (
-            <div className={`px-3 py-1 rounded text-xs font-medium ${
-              nexusInitialized 
-                ? 'bg-green-900 text-green-300 border border-green-600' 
-                : 'bg-orange-900 text-orange-300 border border-orange-600'
-            }`}>
-              Nexus: {nexusInitialized ? 'Ready' : 'Not Initialized'}
+    <div className="fixed top-0 left-0 right-0 z-50">
+      <nav className={`relative transition-all duration-300 ${
+        scrolled 
+          ? 'backdrop-blur-xl bg-black/80 border-b border-white/10' 
+          : 'backdrop-blur-md bg-black/60 border-b border-white/5'
+      }`}>
+        <div className="max-w-screen-2xl mx-auto px-6 lg:px-12">
+          <div className="flex items-center justify-between h-16">
+            {/* Left - Brand */}
+            <div className="flex-shrink-0">
+              <h1 className="text-white text-xl font-bold tracking-tight">
+                Auction.cc
+              </h1>
             </div>
-          )}
 
-          {/* Unified Balance Button */}
-          {isConnected && nexusInitialized && (
-            <button
-              className="px-6 py-3 rounded bg-white text-black hover:bg-gray-200 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-              onClick={handleFetchBalance}
-            >
-              View Unified Balance
-            </button>
-          )}
-          
-          {/* Connect Wallet Button */}
-          <ConnectWalletButton 
-            className="px-6 py-3 rounded bg-white text-black hover:bg-gray-200 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-          />
-          
-          {/* Balance Display */}
-          {balance && (
-            <span className="ml-2 text-lg font-semibold text-green-400 bg-gray-800 px-4 py-2 rounded">
-              {balance}
-            </span>
-          )}
+            {/* Right - Wallet Controls */}
+            <div className="flex items-center gap-3">
+              {/* Init Nexus Button - Only when connected and not initialized */}
+              {isConnected && !nexusInitialized && (
+                <button
+                  className={`px-5 py-2.5 text-sm font-semibold rounded-lg transition-all duration-300 ${
+                    isInitializing 
+                      ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed' 
+                      : 'bg-zinc-800 text-white border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600'
+                  }`}
+                  onClick={handleManualNexusInit}
+                  disabled={isInitializing}
+                >
+                  {isInitializing ? 'Initializing...' : 'Init Nexus'}
+                </button>
+              )}
+
+              {/* Status Badge */}
+              {isConnected && (
+                <div className={`px-4 py-2 text-xs font-semibold rounded-lg flex items-center gap-2 border ${
+                  nexusInitialized 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                    : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                }`}>
+                  <span className={`w-2 h-2 rounded-full ${
+                    nexusInitialized ? 'bg-emerald-400' : 'bg-zinc-500'
+                  }`} />
+                  {nexusInitialized ? 'Ready' : 'Not Init'}
+                </div>
+              )}
+
+              {/* View Balance Button - Only when ready and no balance displayed */}
+              {isConnected && nexusInitialized && !balance && (
+                <button
+                  className="px-5 py-2.5 text-sm font-semibold rounded-lg bg-zinc-800 text-white border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 transition-all duration-300"
+                  onClick={handleFetchBalance}
+                >
+                  View Balance
+                </button>
+              )}
+
+              {/* Balance Display */}
+              {balance && (
+                <button
+                  onClick={handleFetchBalance}
+                  className="px-5 py-2.5 text-sm font-bold rounded-lg bg-zinc-800 text-white border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-600 transition-all duration-300"
+                >
+                  {balance}
+                </button>
+              )}
+
+              {/* Wallet Button */}
+              <ConnectWalletButton 
+                className="px-6 py-2.5 text-sm font-bold rounded-lg bg-white text-black hover:bg-zinc-100 transition-all duration-300 shadow-lg"
+              />
+            </div>
+          </div>
         </div>
       </nav>
-      
-      {/* Navigation Tabs */}
-      {onTabChange && (
-        <div className="bg-gray-900 border-b border-gray-800">
-          <div className="max-w-7xl mx-auto px-12">
-            <div className="flex gap-8">
-              <button
-                onClick={() => onTabChange('auctions')}
-                className={`px-6 py-4 font-medium transition-all duration-200 border-b-2 ${
-                  activeTab === 'auctions'
-                    ? 'text-yellow-400 border-yellow-400'
-                    : 'text-gray-400 border-transparent hover:text-white hover:border-gray-600'
-                }`}
-              >
-                Auctions
-              </button>
-              <button
-                onClick={() => onTabChange('create')}
-                className={`px-6 py-4 font-medium transition-all duration-200 border-b-2 ${
-                  activeTab === 'create'
-                    ? 'text-green-400 border-green-400'
-                    : 'text-gray-400 border-transparent hover:text-white hover:border-gray-600'
-                }`}
-              >
-                Create Auction
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
