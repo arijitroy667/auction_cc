@@ -23,8 +23,8 @@ export default function CreateAuctionPage() {
     startingPrice: '',
     reservePrice: '',
     durationHours: '',
-    preferredToken: '' as SupportedToken | '',
-    preferredChain: '1'
+    preferdToken: '' as SupportedToken | '',
+    preferdChain: '1'
   });
 
   // Check for Nexus initialization status changes
@@ -92,8 +92,22 @@ export default function CreateAuctionPage() {
       return;
     }
 
-    if (!auctionForm.nftContract || !auctionForm.tokenId || !auctionForm.startingPrice || !auctionForm.reservePrice || !auctionForm.durationHours || !auctionForm.preferredToken) {
+    if (!auctionForm.nftContract || !auctionForm.tokenId || !auctionForm.startingPrice || !auctionForm.reservePrice || !auctionForm.durationHours || !auctionForm.preferdToken) {
       alert('Please fill in all required fields');
+      return;
+    }
+
+    // Validate that starting price is greater than reserve price
+    const startingPriceNum = parseFloat(auctionForm.startingPrice);
+    const reservePriceNum = parseFloat(auctionForm.reservePrice);
+
+    if (isNaN(startingPriceNum) || isNaN(reservePriceNum)) {
+      alert('Please enter valid numeric values for starting and reserve prices');
+      return;
+    }
+
+    if (startingPriceNum <= reservePriceNum) {
+      alert('Starting price must be greater than reserve price');
       return;
     }
 
@@ -150,8 +164,8 @@ export default function CreateAuctionPage() {
         startingPrice: auctionForm.startingPrice,
         reservePrice: auctionForm.reservePrice,
         deadline,
-        preferredToken: auctionForm.preferredToken as SupportedToken,
-        preferredChain: parseInt(auctionForm.preferredChain)
+        preferdToken: auctionForm.preferdToken as SupportedToken,
+        preferdChain: parseInt(auctionForm.preferdChain)
       };
 
       console.log('Creating auction with params:', params);
@@ -169,8 +183,8 @@ export default function CreateAuctionPage() {
         startingPrice: '',
         reservePrice: '',
         durationHours: '',
-        preferredToken: '',
-        preferredChain: '1'
+        preferdToken: '',
+        preferdChain: '1'
       });
       
     } catch (error: unknown) {
@@ -247,11 +261,12 @@ export default function CreateAuctionPage() {
                     value={auctionForm.startingPrice}
                     onChange={(e) => setAuctionForm({...auctionForm, startingPrice: e.target.value})}
                   />
+                  <p className="text-xs text-zinc-400 mt-1">Must be greater than reserve price</p>
                 </div>
 
                 <div>
                   <label className="block text-white font-medium mb-2">
-                    Reserve Price <span className="text-blue-400 text-sm">(Optional, in USD)</span>
+                    Reserve Price * <span className="text-blue-400 text-sm">(in USD)</span>
                   </label>
                   <input
                     type="text"
@@ -260,6 +275,7 @@ export default function CreateAuctionPage() {
                     value={auctionForm.reservePrice}
                     onChange={(e) => setAuctionForm({...auctionForm, reservePrice: e.target.value})}
                   />
+                  <p className="text-xs text-zinc-400 mt-1">Minimum acceptable price (must be less than starting price)</p>
                 </div>
               </div>
 
@@ -289,8 +305,8 @@ export default function CreateAuctionPage() {
                   </label>
                   <select
                     className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white backdrop-blur-sm focus:outline-none focus:border-blue-400 transition-colors"
-                    value={auctionForm.preferredToken}
-                    onChange={(e) => setAuctionForm({...auctionForm, preferredToken: e.target.value as SupportedToken | ''})}
+                    value={auctionForm.preferdToken}
+                    onChange={(e) => setAuctionForm({...auctionForm, preferdToken: e.target.value as SupportedToken | ''})}
                   >
                     <option value="">Select preferred token</option>
                     {SUPPORTED_TOKENS.map((token) => (
@@ -307,8 +323,8 @@ export default function CreateAuctionPage() {
                   </label>
                   <select
                     className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white backdrop-blur-sm focus:outline-none focus:border-blue-400 transition-colors"
-                    value={auctionForm.preferredChain}
-                    onChange={(e) => setAuctionForm({...auctionForm, preferredChain: e.target.value})}
+                    value={auctionForm.preferdChain}
+                    onChange={(e) => setAuctionForm({...auctionForm, preferdChain: e.target.value})}
                   >
                     {Object.entries(CHAIN_NAMES).map(([chainId, chainName]) => (
                       <option key={chainId} value={chainId} className="bg-black text-white">
@@ -319,14 +335,14 @@ export default function CreateAuctionPage() {
                 </div>
 
                 {/* Token Contract Address Display */}
-                {auctionForm.preferredToken && auctionForm.preferredChain && (
+                {auctionForm.preferdToken && auctionForm.preferdChain && (
                   <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg backdrop-blur-sm">
                     <h5 className="text-blue-300 font-medium mb-2">Token Contract Address:</h5>
                     <p className="text-white/70 text-sm font-mono break-all">
-                      {TOKEN_ADDRESSES[parseInt(auctionForm.preferredChain) as keyof typeof TOKEN_ADDRESSES]?.[auctionForm.preferredToken as SupportedToken] || 'Unknown'}
+                      {TOKEN_ADDRESSES[parseInt(auctionForm.preferdChain) as keyof typeof TOKEN_ADDRESSES]?.[auctionForm.preferdToken as SupportedToken] || 'Unknown'}
                     </p>
                     <p className="text-white/50 text-xs mt-1">
-                      {auctionForm.preferredToken} on {CHAIN_NAMES[parseInt(auctionForm.preferredChain) as keyof typeof CHAIN_NAMES]}
+                      {auctionForm.preferdToken} on {CHAIN_NAMES[parseInt(auctionForm.preferdChain) as keyof typeof CHAIN_NAMES]}
                     </p>
                   </div>
                 )}
@@ -354,6 +370,10 @@ export default function CreateAuctionPage() {
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 mt-1">•</span>
                   The NFT will be transferred to the auction contract during creation
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-400 mt-1">•</span>
+                  <strong className="text-white">Starting price must be greater than reserve price</strong>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 mt-1">•</span>

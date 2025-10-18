@@ -281,7 +281,7 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         console.log(`   - Starting cross-chain settlement for auction ${intentId.slice(0, 10)}...`);
         
         const sourceChainConfig = getChainConfig(sourceChain);
-        const targetChainConfig = getChainConfig(auction.preferredChain?.toString() || auction.preferdChain?.toString());
+        const targetChainConfig = getChainConfig(auction.preferdChain?.toString() || auction.preferdChain?.toString());
         
         if (!sourceChainConfig || !targetChainConfig) {
             throw new Error(`Chain configuration not found`);
@@ -305,7 +305,7 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         const nexusSDK = await getNexusSDK();
 
         const winnerTokenAddress = winner.token;
-        const requiredTokenAddress = auction.preferredToken || auction.preferdToken;
+        const requiredTokenAddress = auction.preferdToken || auction.preferdToken;
         const bidAmount = winner.amount;
 
         // Validate that we're working with stable coins as expected

@@ -20,8 +20,8 @@ interface AuctionData {
   startingPrice: string;
   reservePrice: string;
   deadline: number;
-  preferredToken: string;
-  preferredChain: number;
+  preferdToken: string;
+  preferdChain: number;
   status: AuctionStatus;
   highestBid: string;
   highestBidder: string;
@@ -76,6 +76,7 @@ export default function AuctionTestPanel() {
       const auctionHub = getAuctionHubContract(signer);
 
       const auction = await auctionHub.getAuction(intentId);
+      console.log("Fetched auction data:", auction.preferdChain);
       
       setAuctionData({
         nftContract: auction.nftContract,
@@ -84,8 +85,8 @@ export default function AuctionTestPanel() {
         startingPrice: ethers.formatEther(auction.startingPrice),
         reservePrice: ethers.formatEther(auction.reservePrice),
         deadline: Number(auction.deadline),
-        preferredToken: auction.preferredToken,
-        preferredChain: Number(auction.preferredChain),
+        preferdToken: auction.preferdToken,
+        preferdChain: Number(auction.preferdChain),
         status: Number(auction.status) as AuctionStatus,
         highestBid: ethers.formatEther(auction.highestBid),
         highestBidder: auction.highestBidder
@@ -280,7 +281,7 @@ export default function AuctionTestPanel() {
             
             <div>
               <span className="text-gray-400">Preferred Chain:</span>
-              <p className="text-white">{auctionData.preferredChain}</p>
+              <p className="text-white">{auctionData.preferdChain}</p>
             </div>
             
             <div>

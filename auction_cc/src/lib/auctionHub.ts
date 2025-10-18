@@ -8,8 +8,8 @@ export interface CreateAuctionParams {
   startingPrice: string;
   reservePrice?: string;
   deadline: number;
-  preferredToken: SupportedToken;
-  preferredChain: number;
+  preferdToken: SupportedToken;
+  preferdChain: number;
 }
 
 export class AuctionHubContract {
@@ -31,14 +31,14 @@ export class AuctionHubContract {
       startingPrice,
       reservePrice,
       deadline,
-      preferredToken,
-      preferredChain
+      preferdToken,
+      preferdChain
     } = params;
 
     // Get token address for the preferred chain
-    const tokenAddress = TOKEN_ADDRESSES[preferredChain as keyof typeof TOKEN_ADDRESSES]?.[preferredToken];
+    const tokenAddress = TOKEN_ADDRESSES[preferdChain as keyof typeof TOKEN_ADDRESSES]?.[preferdToken];
     if (!tokenAddress) {
-      throw new Error(`Token ${preferredToken} not supported on chain ${preferredChain}`);
+      throw new Error(`Token ${preferdToken} not supported on chain ${preferdChain}`);
     }
 
     // Convert prices to wei (assuming 18 decimals for most tokens)
@@ -53,7 +53,7 @@ export class AuctionHubContract {
         reservePriceWei,
         deadline,
         tokenAddress,
-        preferredChain
+        preferdChain
       );
 
       const receipt = await tx.wait();

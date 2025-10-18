@@ -6,3 +6,7 @@ import {sdk} from "../../lib/nexus/nexusClient";
 export const result = async () => {
     return await sdk.getUnifiedBalances();
 }
+
+export const resultForToken = async (symbol: string) => {
+    return await sdk.getUnifiedBalance(symbol);
+}

@@ -35,3 +35,4 @@ export const CHAIN_NAMES = {
 } as const;
 
 export const AUCTION_HUB_ADDRESS = '0x003b0C383aFF1C5a08073fB8e5e704818313Ee95';
+export const BID_MANAGER_ADDRESS = '0x8CDcA61d24949ecE0402e38b0F3F55929F697342'; // TODO: Update with deployed BidManager address

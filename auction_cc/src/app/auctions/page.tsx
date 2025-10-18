@@ -260,12 +260,12 @@ const handleBidSubmit = async (amount: string) => {
                       
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-white/50">Starting:</span>
-                        <span className="text-white/90 font-mono">{formatPrice(auction.startingPrice)} ETH</span>
+                        <span className="text-white/90 font-mono">${formatPrice(auction.startingPrice)}</span>
                       </div>
                       
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-white/50">Reserve:</span>
-                        <span className="text-white/90 font-mono">{formatPrice(auction.reservePrice)} ETH</span>
+                        <span className="text-white/90 font-mono">${formatPrice(auction.reservePrice)}</span>
                       </div>
                       
                       <div className="pt-3 border-t border-white/10">
@@ -332,6 +332,7 @@ const handleBidSubmit = async (amount: string) => {
   <BidForm
     auctionId={selectedAuction.intentId}
     startingPrice={selectedAuction.startingPrice}
+    reservePrice={selectedAuction.reservePrice}
     onBidSubmit={handleBidSubmit}
     onClose={() => setSelectedAuction(null)}
   />
