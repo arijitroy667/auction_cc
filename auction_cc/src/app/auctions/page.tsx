@@ -6,6 +6,8 @@ import { isInitialized } from "@/lib/nexus/nexusClient";
 import Navbar from "@/components/navbar";
 import Link from "next/link";
 import { ethers } from "ethers";
+import BidForm from '@/components/BidComponent';
+import LiveBidLeaderboard from '@/components/LiveBid';
 
 interface Auction {
   intentId: string;
@@ -39,13 +41,13 @@ const CHAIN_NAMES: { [key: string]: string } = {
 };
 
 export default function AuctionsPage() {
-  const { isConnected } = useAccount();
+  const { isConnected , address } = useAccount();
   const [initialized, setInitialized] = useState(isInitialized());
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedChain, setSelectedChain] = useState<string>('');
-
+  const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   // Check for Nexus initialization status changes
   useEffect(() => {
     const checkInitialization = () => {
@@ -93,6 +95,45 @@ export default function AuctionsPage() {
       setLoading(false);
     }
   };
+
+const handleBidSubmit = async (amount: string) => {
+  if (!selectedAuction || !isConnected || !address) {
+    throw new Error('Wallet not connected or auction not selected');
+  }
+
+  if (!amount || isNaN(Number(amount))) {
+    throw new Error('Invalid amount');
+  }
+
+  try {
+    const wei = ethers.parseEther(amount).toString();
+    const url = `${KEEPER_API_URL.replace(/\/+$/, '')}/api/bids/${encodeURIComponent(selectedAuction.intentId)}`;
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bidder: address,
+        amount: wei,
+        token: selectedAuction.preferdToken ?? null,
+        sourceChain: selectedAuction.sourceChain ?? null
+      })
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json?.success) {
+      throw new Error(json?.error || 'Failed to place bid');
+    }
+
+    await refreshAuctions();
+    setSelectedAuction(null);
+    return json.data;
+  } catch (err) {
+    console.error('handleBidSubmit error:', err);
+    throw err;
+  }
+};
+
 
   useEffect(() => {
     refreshAuctions();
@@ -238,6 +279,13 @@ export default function AuctionsPage() {
                           </span>
                         </div>
                       </div>
+                      
+                      <button
+  onClick={() => setSelectedAuction(auction)}
+  className="mt-4 w-full py-2 bg-white text-black rounded-lg font-semibold hover:bg-zinc-200 transition-colors"
+>
+  Place Bid
+</button>
 
                       <div className="pt-2">
                         <a
@@ -249,7 +297,9 @@ export default function AuctionsPage() {
                           <span className="mr-1">🔗</span>
                           View Transaction
                         </a>
+                        
                       </div>
+                      <LiveBidLeaderboard auctionId={auction.intentId} />
                     </div>
                   </div>
                 ))
@@ -278,7 +328,14 @@ export default function AuctionsPage() {
                 {loading ? 'Loading...' : 'Refresh Auctions'}
               </button>
             </div>
-
+            {selectedAuction && (
+  <BidForm
+    auctionId={selectedAuction.intentId}
+    startingPrice={selectedAuction.startingPrice}
+    onBidSubmit={handleBidSubmit}
+    onClose={() => setSelectedAuction(null)}
+  />
+)}
             {/* Connection Status */}
             {!isConnected && (
               <div className="mt-8 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg backdrop-blur-sm">
