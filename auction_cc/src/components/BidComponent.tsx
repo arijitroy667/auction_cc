@@ -251,8 +251,6 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
       console.log('Token Address:', tokenAddress);
 
       console.log('\n=== STEP 1: NEXUS TRANSFER ===');
-      // Use Nexus SDK transfer - only transfer the incremental amount needed
-      // It will automatically aggregate tokens from all chains
       const transferResult = await nexusTransfer(
         selectedToken,        // token symbol (USDC or USDT)
         incrementalAmount,   // only transfer the additional amount needed
@@ -272,8 +270,8 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
       console.log(`Tokens transferred to BidManager (${incrementalAmount} ${selectedToken})`);
       
       // Wait for the transfer to be confirmed and indexed
-      console.log('Waiting 15 seconds for blockchain confirmation...');
-      await new Promise(resolve => setTimeout(resolve, 15000));
+      console.log('Waiting 10 seconds for blockchain confirmation...');
+      await new Promise(resolve => setTimeout(resolve, 10000));
 
       console.log('\n=== STEP 3: VERIFYING BALANCE ===');
       // Create a provider for verification and later transaction

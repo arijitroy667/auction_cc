@@ -194,20 +194,6 @@ app.get('/api/bids/:intentId', (req, res) => {
         });
     }
 });
-app.post('/api/bids/:intentId', (req, res) => {
-    const { intentId } = req.params;
-    const { bidder, amount, token, sourceChain } = req.body;
-    if (!bidder || !amount)
-        return res.status(400).json({ success: false, error: 'Missing bidder or amount' });
-    const allBids = (0, event_listner_1.getAllBids)();
-    if (!allBids.has(intentId))
-        allBids.set(intentId, []);
-    const bid = { intentId, bidder, amount: amount.toString(), token: token || null, sourceChain: sourceChain || null, timestamp: Date.now().toString() };
-    allBids.get(intentId).push(bid);
-    const sorted = [...allBids.get(intentId)].sort((a, b) => (BigInt(b.amount) > BigInt(a.amount) ? 1 : (BigInt(b.amount) < BigInt(a.amount) ? -1 : 0)));
-    const top10 = sorted.slice(0, 10);
-    return res.json({ success: true, data: { bid, top10 } });
-});
 // Get keeper configuration (without sensitive data)
 app.get('/api/config', (req, res) => {
     try {

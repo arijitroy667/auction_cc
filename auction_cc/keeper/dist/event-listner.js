@@ -20,12 +20,31 @@ const bidStore = new Map();
 const auctionStore = new Map();
 // Store active contracts for cleanup
 let activeContracts = [];
+// Track processed events to prevent duplicates
+const processedEvents = new Set();
 function addBid(intentId, bid) {
     if (!bidStore.has(intentId)) {
         bidStore.set(intentId, []);
     }
-    bidStore.get(intentId).push(bid);
-    console.log(`[+] New Bid Recorded for ${intentId.slice(0, 10)}... on ${bid.sourceChain} - Amount: ${ethers_1.ethers.formatUnits(bid.amount, 6)} ${bid.token.slice(0, 8)}...`);
+    const bids = bidStore.get(intentId);
+    // Check if this bidder already has a bid from the same chain
+    const existingBidIndex = bids.findIndex((b) => b.bidder.toLowerCase() === bid.bidder.toLowerCase() &&
+        b.sourceChain === bid.sourceChain &&
+        b.token.toLowerCase() === bid.token.toLowerCase());
+    if (existingBidIndex !== -1) {
+        // Update existing bid - the event emits the INCREMENTAL amount, so we ADD it
+        const oldAmount = bids[existingBidIndex].amount;
+        const newAmount = BigInt(oldAmount) + BigInt(bid.amount);
+        bids[existingBidIndex].amount = newAmount.toString();
+        bids[existingBidIndex].timestamp = bid.timestamp;
+        bids[existingBidIndex].transactionHash = bid.transactionHash;
+        console.log(`[+] Updated Bid for ${intentId.slice(0, 10)}... on ${bid.sourceChain} - Bidder: ${bid.bidder.slice(0, 8)}... - New Total: ${ethers_1.ethers.formatUnits(newAmount, 6)}`);
+    }
+    else {
+        // New bid from this user/chain combination
+        bids.push(bid);
+        console.log(`[+] New Bid Recorded for ${intentId.slice(0, 10)}... on ${bid.sourceChain} - Bidder: ${bid.bidder.slice(0, 8)}... - Amount: ${ethers_1.ethers.formatUnits(bid.amount, 6)}`);
+    }
 }
 function getBids(intentId) {
     return bidStore.get(intentId) || [];
@@ -72,6 +91,14 @@ async function startEventListeners() {
             activeContracts.push(bidManagerContract);
             // Listen for new bid events (real-time)
             bidManagerContract.on("BidPlaced", (intentId, bidder, token, amount, event) => {
+                // Create unique event identifier to prevent duplicates
+                const eventId = `${event.transactionHash}-${event.logIndex || event.index || 0}-bid`;
+                // Skip if we've already processed this event
+                if (processedEvents.has(eventId)) {
+                    console.log(`   - Skipping duplicate bid event: ${eventId}`);
+                    return;
+                }
+                processedEvents.add(eventId);
                 const bid = {
                     intentId,
                     bidder,
@@ -91,6 +118,14 @@ async function startEventListeners() {
                 activeContracts.push(auctionHub);
                 // Listen for new auction events (real-time)
                 auctionHub.on("AuctionCreated", (intentId, seller, nftContract, tokenId, startingPrice, reservePrice, deadline, preferdToken, preferdChain, event) => {
+                    // Create unique event identifier to prevent duplicates
+                    const eventId = `${event.transactionHash}-${event.logIndex || event.index || 0}-auction`;
+                    // Skip if we've already processed this event
+                    if (processedEvents.has(eventId)) {
+                        console.log(`   - Skipping duplicate auction event: ${eventId}`);
+                        return;
+                    }
+                    processedEvents.add(eventId);
                     console.log(`🎉 AuctionCreated EVENT DETECTED on ${chain.name}!`);
                     console.log(`   Intent ID: ${intentId}`);
                     console.log(`   Seller: ${seller}`);

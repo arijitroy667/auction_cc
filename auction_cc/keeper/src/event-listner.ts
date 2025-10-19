@@ -98,8 +98,23 @@ export async function startEventListeners() {
 
             // Listen for new bid events (real-time)
             bidManagerContract.on("BidPlaced", (intentId, bidder, token, amount, event) => {
+                // Debug: Log the event structure
+                console.log(`🔍 DEBUG - Event structure on ${chain.name}:`, {
+                    transactionHash: event.transactionHash,
+                    logIndex: event.logIndex,
+                    index: event.index,
+                    blockNumber: event.blockNumber,
+                    eventKeys: Object.keys(event)
+                });
+                
                 // Create unique event identifier to prevent duplicates
-                const eventId = `${event.transactionHash}-${event.log?.index || 0}-bid`;
+                // Use a combination of txHash and blockNumber as fallback if logIndex is undefined
+                const logId = event.logIndex !== undefined ? event.logIndex : 
+                             event.index !== undefined ? event.index : 
+                             event.blockNumber || Math.random();
+                const eventId = `${event.transactionHash}-${logId}-bid`;
+                
+                console.log(`🎯 Created event ID: ${eventId}`);
                 
                 // Skip if we've already processed this event
                 if (processedEvents.has(eventId)) {
@@ -118,6 +133,8 @@ export async function startEventListeners() {
                     transactionHash: event.transactionHash,
                     timestamp: new Date().toISOString()
                 };
+                
+                console.log(`🎉 NEW BID EVENT on ${chain.name}! Processing...`);
                 addBid(intentId, bid);
             });
             
@@ -132,7 +149,7 @@ export async function startEventListeners() {
                 // Listen for new auction events (real-time)
                 auctionHub.on("AuctionCreated", (intentId, seller, nftContract, tokenId, startingPrice, reservePrice, deadline, preferdToken, preferdChain, event) => {
                     // Create unique event identifier to prevent duplicates
-                    const eventId = `${event.log.transactionHash}-${event.log?.index || 0}-auction`;
+                    const eventId = `${event.transactionHash}-${event.logIndex || event.index || 0}-auction`;
                     
                     // Skip if we've already processed this event
                     if (processedEvents.has(eventId)) {
