@@ -30,7 +30,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
   const supportedChains = Object.keys(CHAIN_NAMES).map(Number);
 
-  // Fetch highest bid for this auction
+  // Fetch highest bid for this auction (aggregated by user)
   useEffect(() => {
     const fetchHighestBid = async () => {
       setBidsLoading(true);
@@ -39,8 +39,18 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.data && data.data.length > 0) {
-            // Find the highest bid amount
-            const maxBid = Math.max(...data.data.map((bid: any) => parseFloat(ethers.formatEther(bid.amount))));
+            // Aggregate bids by bidder address first
+            const bidderMap = new Map<string, number>();
+            
+            data.data.forEach((bid: any) => {
+              const bidderKey = bid.bidder.toLowerCase();
+              const amount = parseFloat(ethers.formatUnits(bid.amount, 6));
+              const existing = bidderMap.get(bidderKey) || 0;
+              bidderMap.set(bidderKey, existing + amount);
+            });
+            
+            // Find the highest aggregated bid
+            const maxBid = Math.max(...Array.from(bidderMap.values()));
             setHighestBid(maxBid);
           } else {
             setHighestBid(0);
@@ -57,43 +67,75 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
     fetchHighestBid();
   }, [auctionId]);
 
-  // Fetch user's existing bid from the contract
+  // Fetch user's existing bids from the backend (aggregated across all chains)
   useEffect(() => {
     const fetchExistingBid = async () => {
-      if (!isConnected || !address || !walletClient) return;
+      if (!isConnected || !address) return;
 
       try {
-        const provider = new ethers.BrowserProvider(walletClient as any);
-        const bidManagerContract = new ethers.Contract(
-          BID_MANAGER_ADDRESS,
-          BidManagerABI,
-          provider
-        );
-
-        const intentIdBytes32 = ethers.zeroPadValue(ethers.toBeHex(auctionId), 32);
+        console.log('=== FETCHING EXISTING BID FROM BACKEND ===');
+        console.log('Auction ID:', auctionId);
+        console.log('User Address:', address);
         
-        // Call lockedBids mapping to get user's existing bid
-        const bid = await bidManagerContract.lockedBids(intentIdBytes32, address);
+        // Fetch all bids for this auction from the backend
+        const response = await fetch(`http://localhost:3001/api/bids/${auctionId}`);
         
-        if (bid && bid.amount > 0) {
-          // Assuming 6 decimals for USDC/USDT
-          const existingAmount = parseFloat(ethers.formatUnits(bid.amount, 6));
-          setExistingBid(existingAmount);
-          setExistingBidToken(bid.token);
-          console.log('User has existing bid:', existingAmount, 'with token:', bid.token);
-        } else {
+        if (!response.ok) {
+          console.warn('Failed to fetch bids from backend');
           setExistingBid(0);
           setExistingBidToken(null);
+          return;
         }
+
+        const data = await response.json();
+        
+        if (!data.success || !data.data || data.data.length === 0) {
+          console.log('✓ No bids found for this auction');
+          setExistingBid(0);
+          setExistingBidToken(null);
+          return;
+        }
+
+        // Find all bids from the current user (could be from multiple chains)
+        const userBids = data.data.filter(
+          (bid: any) => bid.bidder.toLowerCase() === address.toLowerCase()
+        );
+
+        if (userBids.length === 0) {
+          console.log('✓ No existing bids from this user');
+          setExistingBid(0);
+          setExistingBidToken(null);
+          return;
+        }
+
+        // Calculate total bid amount across all chains for this user
+        const totalBidAmount = userBids.reduce((total: number, bid: any) => {
+          // Bid amounts are stored with 6 decimals (USDC/USDT)
+          const amount = parseFloat(ethers.formatUnits(bid.amount, 6));
+          return total + amount;
+        }, 0);
+
+        // Get the token from the first bid (assuming user uses same token)
+        const firstBidToken = userBids[0].token;
+
+        console.log('✓ User has existing bids:');
+        console.log('  - Total bids:', userBids.length);
+        console.log('  - Chains:', userBids.map((b: any) => b.sourceChain).join(', '));
+        console.log('  - Total amount: $' + totalBidAmount.toFixed(2));
+        console.log('  - Token:', firstBidToken);
+
+        setExistingBid(totalBidAmount);
+        setExistingBidToken(firstBidToken);
+
       } catch (error) {
-        console.error('Failed to fetch existing bid:', error);
+        console.error('Failed to fetch existing bid from backend:', error);
         setExistingBid(0);
         setExistingBidToken(null);
       }
     };
 
     fetchExistingBid();
-  }, [auctionId, isConnected, address, walletClient]);
+  }, [auctionId, isConnected, address]);
 
   useEffect(() => {
     const fetchBalance = async () => {
@@ -139,43 +181,50 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
       return;
     }
 
-    // Check if user is increasing an existing bid
+    // Check if user is increasing an existing bid (aggregated across all chains)
     if (existingBid > 0) {
       if (newTotalBidAmount <= existingBid) {
-        alert(`Your new bid must be higher than your existing bid of $${existingBid.toFixed(2)}`);
+        alert(`Your new bid must be higher than your total existing bid of $${existingBid.toFixed(2)} (across all chains)`);
         return;
       }
       
-      // Verify user is using the same token
-      const tokenAddress = TOKEN_ADDRESSES[selectedChain as keyof typeof TOKEN_ADDRESSES][selectedToken];
-      if (existingBidToken && existingBidToken.toLowerCase() !== tokenAddress?.toLowerCase()) {
-        alert(`You must use the same token (${selectedToken}) as your existing bid`);
-        return;
-      }
+      // Note: User can bid from different chains, so we allow different tokens
+      // The backend aggregates all bids by this user for this auction
+      console.log('✓ Increasing existing bid from $' + existingBid.toFixed(2) + ' to $' + newTotalBidAmount.toFixed(2));
     }
 
-    // Parse starting and reserve prices
-    const startingPriceNum = parseFloat(ethers.formatEther(startingPrice));
-    const reservePriceNum = parseFloat(ethers.formatEther(reservePrice));
+    // Parse starting and reserve prices (stored as 6 decimals for USDC/USDT)
+    const startingPriceNum = parseFloat(ethers.formatUnits(startingPrice, 6));
+    const reservePriceNum = parseFloat(ethers.formatUnits(reservePrice, 6));
 
-    // Validation logic for Dutch auction (prices decrease over time)
+    // Validation logic for English auction (bids increase over time)
     if (highestBid === 0) {
-      // First bidder: must bid between reserve and starting price
-      if (newTotalBidAmount < reservePriceNum || newTotalBidAmount > startingPriceNum) {
-        alert(`First bid must be between $${reservePriceNum.toFixed(2)} (reserve) and $${startingPriceNum.toFixed(2)} (starting price)`);
+      // First bidder: must bid at least the reserve price, up to starting price
+      if (newTotalBidAmount < reservePriceNum) {
+        alert(`First bid must be at least $${reservePriceNum.toFixed(2)} (reserve price)`);
+        return;
+      }
+      if (newTotalBidAmount > startingPriceNum) {
+        alert(`Bid cannot exceed $${startingPriceNum.toFixed(2)} (maximum price)`);
         return;
       }
     } else {
-      // Subsequent bidders: must bid lower than the current lowest bid
-      // and must be at or above reserve price
-      if (newTotalBidAmount < highestBid || newTotalBidAmount > startingPriceNum) {
-        alert(`Your bid must be between $${highestBid.toFixed(2)} (current lowest) and $${startingPriceNum.toFixed(2)} (starting price)`);
+      // Subsequent bidders: must bid HIGHER than the current highest bid
+      // and cannot exceed the starting price (maximum)
+      if (newTotalBidAmount <= highestBid) {
+        alert(`Your bid must be higher than the current highest bid of $${highestBid.toFixed(2)}`);
+        return;
+      }
+      if (newTotalBidAmount > startingPriceNum) {
+        alert(`Bid cannot exceed $${startingPriceNum.toFixed(2)} (maximum price)`);
         return;
       }
     }
 
     // Calculate the incremental amount needed
-    const incrementalAmount = existingBid > 0 ? newTotalBidAmount - existingBid : newTotalBidAmount;
+    // Round to 6 decimals to avoid floating-point precision issues
+    const rawIncrementalAmount = existingBid > 0 ? newTotalBidAmount - existingBid : newTotalBidAmount;
+    const incrementalAmount = Math.round(rawIncrementalAmount * 1e6) / 1e6;
 
     if (incrementalAmount > unifiedBalance) {
       alert(`Insufficient balance. You need $${incrementalAmount.toFixed(2)} more, but only have $${unifiedBalance.toFixed(2)} ${selectedToken} available across all chains.`);
@@ -185,13 +234,23 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
     try {
       setLoading(true);
 
-      console.log('Initiating cross-chain transfer via Nexus SDK...');
-      console.log(`Total Bid Amount: $${newTotalBidAmount} ${selectedToken}`);
-      console.log(`Existing Bid: $${existingBid}`);
-      console.log(`Incremental Amount to Transfer: $${incrementalAmount} ${selectedToken}`);
-      console.log(`Target Chain: ${CHAIN_NAMES[selectedChain as keyof typeof CHAIN_NAMES]}`);
-      console.log(`Recipient (BidManager): ${BID_MANAGER_ADDRESS}`);
+      console.log('=== BID SUBMISSION STARTED ===');
+      console.log('Auction ID:', auctionId);
+      console.log('Connected Address:', address);
+      console.log('Selected Chain:', selectedChain, CHAIN_NAMES[selectedChain as keyof typeof CHAIN_NAMES]);
+      console.log('Total Bid Amount:', newTotalBidAmount, selectedToken);
+      console.log('Existing Bid:', existingBid);
+      console.log('Incremental Amount to Transfer:', incrementalAmount, selectedToken);
+      console.log('BidManager Address:', BID_MANAGER_ADDRESS);
 
+      // Get the token address early for verification
+      const tokenAddress = TOKEN_ADDRESSES[selectedChain as keyof typeof TOKEN_ADDRESSES][selectedToken];
+      if (!tokenAddress) {
+        throw new Error(`Token address not found for ${selectedToken} on chain ${selectedChain}`);
+      }
+      console.log('Token Address:', tokenAddress);
+
+      console.log('\n=== STEP 1: NEXUS TRANSFER ===');
       // Use Nexus SDK transfer - only transfer the incremental amount needed
       // It will automatically aggregate tokens from all chains
       const transferResult = await nexusTransfer(
@@ -202,32 +261,52 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
         undefined            // sourceChains - let SDK auto-select from available balances
       );
 
-      console.log('Nexus transfer completed:', transferResult);
+      console.log('Nexus transfer result:', transferResult);
 
       if (!transferResult || !transferResult.success) {
-        throw new Error('Transfer failed or was not completed');
+        throw new Error('Nexus transfer failed or was not completed');
       }
 
+      console.log('\n=== STEP 2: WAITING FOR CONFIRMATION ===');
       // After successful transfer, the tokens are now on the target chain at BidManager
-      console.log(`Tokens successfully transferred to BidManager contract on target chain (${incrementalAmount} ${selectedToken})`);
+      console.log(`Tokens transferred to BidManager (${incrementalAmount} ${selectedToken})`);
+      
+      // Wait for the transfer to be confirmed and indexed
+      console.log('Waiting 15 seconds for blockchain confirmation...');
+      await new Promise(resolve => setTimeout(resolve, 15000));
 
-      // Now we call placeBid on the BidManager contract
-      // Note: No approval needed since funds are already in the BidManager contract
-      console.log('Placing bid on BidManager...');
+      console.log('\n=== STEP 3: VERIFYING BALANCE ===');
+      // Create a provider for verification and later transaction
+      const provider = new ethers.BrowserProvider(walletClient as any);
       
-      // Get the token address for the selected chain and token
-      const tokenAddress = TOKEN_ADDRESSES[selectedChain as keyof typeof TOKEN_ADDRESSES][selectedToken];
-      
-      if (!tokenAddress) {
-        throw new Error(`Token address not found for ${selectedToken} on chain ${selectedChain}`);
+      // Check BidManager contract balance
+      const tokenContract = new ethers.Contract(
+        tokenAddress,
+        ['function balanceOf(address) view returns (uint256)'],
+        provider
+      );
+
+      const bidManagerBalance = await tokenContract.balanceOf(BID_MANAGER_ADDRESS);
+      console.log(`✓ BidManager balance: ${ethers.formatUnits(bidManagerBalance, 6)} ${selectedToken}`);
+
+      // Format the amount to exactly 6 decimal places to avoid precision issues
+      const formattedAmount = incrementalAmount.toFixed(6);
+      const expectedAmount = ethers.parseUnits(formattedAmount, 6);
+      console.log(`✓ Expected transfer amount: ${formattedAmount} ${selectedToken}`);
+
+      if (bidManagerBalance < expectedAmount) {
+        console.warn('⚠️ Warning: BidManager balance is less than expected amount!');
+        console.warn('This might cause the placeBid transaction to fail.');
+        console.warn('Continuing anyway - the smart contract will verify...');
       }
+
+      console.log('\n=== STEP 4: CALLING PLACEBID ===');
+      // Now we call placeBid on the BidManager contract
+      console.log('Preparing placeBid transaction...');
 
       // Convert the INCREMENTAL amount to wei (assuming 6 decimals for USDC/USDT)
-      // The smart contract will add this to the existing bid amount
-      const amountInWei = ethers.parseUnits(incrementalAmount.toString(), 6);
-
-      // Create a provider and signer for the transaction
-      const provider = new ethers.BrowserProvider(walletClient as any);
+      // Use the same formatted amount to ensure consistency
+      const amountInWei = ethers.parseUnits(formattedAmount, 6);
       const signer = await provider.getSigner();
 
       // Create contract instance
@@ -288,7 +367,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
                     <span>First Bid - Acceptable Range:</span>
                   </div>
                   <div className="text-lg font-bold text-white">
-                    ${parseFloat(ethers.formatEther(reservePrice)).toFixed(2)} - ${parseFloat(ethers.formatEther(startingPrice)).toFixed(2)}
+                    ${parseFloat(ethers.formatUnits(reservePrice, 6)).toFixed(2)} - ${parseFloat(ethers.formatUnits(startingPrice, 6)).toFixed(2)}
                   </div>
                   <p className="text-xs text-zinc-500 mt-1">
                     First bidders must bid between reserve and starting price
@@ -297,15 +376,15 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
               ) : (
                 <>
                   <div className="flex justify-between items-center mb-1">
-                    <span>Current Lowest Bid:</span>
+                    <span>Current Highest Bid:</span>
                     <span className="text-lg font-bold text-green-400">${highestBid.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center mt-2">
                     <span>Your Bid Range:</span>
-                    <span className="text-sm text-white">${highestBid.toFixed(2)} - ${parseFloat(ethers.formatEther(startingPrice)).toFixed(2)}</span>
+                    <span className="text-sm text-white">${(highestBid + 0.01).toFixed(2)} - ${parseFloat(ethers.formatUnits(startingPrice, 6)).toFixed(2)}</span>
                   </div>
                   <p className="text-xs text-zinc-500 mt-1">
-                    Dutch Auction: Bid lower than previous bids (between current lowest and starting price)
+                    English Auction: Bid higher than the current highest bid
                   </p>
                 </>
               )}
@@ -316,11 +395,14 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
           {existingBid > 0 && (
             <div className="bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/30">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-400">Your Current Bid:</span>
+                <span className="text-sm text-zinc-400">Your Total Bid (All Chains):</span>
                 <span className="text-lg font-bold text-yellow-400">${existingBid.toFixed(2)}</span>
               </div>
               <p className="text-xs text-zinc-500 mt-1">
                 💡 You can increase your bid. Only the additional amount will be transferred.
+              </p>
+              <p className="text-xs text-zinc-400 mt-1">
+                🔗 Your bids are aggregated across all chains where you've placed them
               </p>
             </div>
           )}

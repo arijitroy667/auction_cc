@@ -297,7 +297,7 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
 
         // Release the winning bid from BidManager
         console.log(`   - Releasing winning bid from BidManager on ${sourceChain}...`);
-        const releaseTx = await bidManager.releaseWinningBid(intentId, winner.bidder);
+        const releaseTx = await bidManager.releaseWinningBid(intentId, winner.bidder, auction.seller);
         await releaseTx.wait();
         console.log(`   - Winning bid released. Tx: ${releaseTx.hash}`);
 

@@ -1,12 +1,6 @@
 [
     {
-        "inputs": [
-            {
-                "internalType": "address",
-                "name": "_auctionHub",
-                "type": "address"
-            }
-        ],
+        "inputs": [],
         "stateMutability": "nonpayable",
         "type": "constructor"
     },
@@ -51,7 +45,7 @@
         "anonymous": false,
         "inputs": [
             {
-                "indexed": false,
+                "indexed": true,
                 "internalType": "bytes32",
                 "name": "indexId",
                 "type": "bytes32"
@@ -110,16 +104,21 @@
         "type": "function"
     },
     {
-        "inputs": [],
-        "name": "auctionHub",
-        "outputs": [
+        "inputs": [
             {
-                "internalType": "contract IAuctionHub",
-                "name": "",
+                "internalType": "address",
+                "name": "token",
                 "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "amount",
+                "type": "uint256"
             }
         ],
-        "stateMutability": "view",
+        "name": "emergencyWithdraw",
+        "outputs": [],
+        "stateMutability": "nonpayable",
         "type": "function"
     },
     {
@@ -161,14 +160,14 @@
                 "type": "address"
             },
             {
-                "internalType": "address",
-                "name": "token",
-                "type": "address"
-            },
-            {
                 "internalType": "uint256",
                 "name": "amount",
                 "type": "uint256"
+            },
+            {
+                "internalType": "address",
+                "name": "token",
+                "type": "address"
             },
             {
                 "internalType": "uint256",
@@ -254,6 +253,11 @@
             {
                 "internalType": "address",
                 "name": "winner",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "seller",
                 "type": "address"
             }
         ],

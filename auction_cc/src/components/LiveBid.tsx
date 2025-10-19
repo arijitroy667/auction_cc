@@ -1,19 +1,32 @@
 import { useEffect, useState } from 'react';
 import { useAccount } from 'wagmi';
 import { ethers } from 'ethers';
+import BidsModal from './BidsModal';
 
 interface BidRecord {
   intentId: string;
   bidder: string;
   amount: string;
   timestamp: string;
+  token?: string;
+  sourceChain?: string;
+}
+
+interface AggregatedBid {
+  bidder: string;
+  amount: string;
+  timestamp: string;
+  intentId: string;
+  chains: string[]; // Array of chains where this user has bid
+  bidCount: number; // Number of bids from this user
 }
 
 export default function LiveBidLeaderboard({ auctionId }: { auctionId: string }) {
   const { address } = useAccount();
-  const [top, setTop] = useState<BidRecord[]>([]);
-  const [userBid, setUserBid] = useState<BidRecord | null>(null);
-  const [isPolling, setIsPolling] = useState(true);
+  const [topBid, setTopBid] = useState<AggregatedBid | null>(null);
+  const [userBid, setUserBid] = useState<AggregatedBid | null>(null);
+  const [totalBidders, setTotalBidders] = useState(0);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const BASE = process.env.NEXT_PUBLIC_KEEPER_API_URL || 'http://localhost:3001';
 
   useEffect(() => {
@@ -21,20 +34,69 @@ export default function LiveBidLeaderboard({ auctionId }: { auctionId: string })
     let timer: NodeJS.Timeout | null = null;
 
     async function poll() {
-      if (!isPolling) return;
-      
       try {
         const r = await fetch(`${BASE}/api/bids/${auctionId}`);
         const j = await r.json();
         if (!j.success || !mounted) return;
         
         const bids: BidRecord[] = j.data || [];
-        const sorted = bids.sort((a, b) => {
+        
+        // Aggregate bids by bidder address
+        const bidderMap = new Map<string, { 
+          bidder: string; 
+          amount: bigint; 
+          timestamp: string; 
+          intentId: string;
+          chains: Set<string>;
+          bidCount: number;
+        }>();
+        
+        bids.forEach(bid => {
+          const bidderKey = bid.bidder.toLowerCase();
+          const existing = bidderMap.get(bidderKey);
+          
+          if (existing) {
+            existing.amount += BigInt(bid.amount);
+            if (bid.sourceChain) {
+              existing.chains.add(bid.sourceChain);
+            }
+            existing.bidCount += 1;
+            if (parseInt(bid.timestamp) > parseInt(existing.timestamp)) {
+              existing.timestamp = bid.timestamp;
+            }
+          } else {
+            const chains = new Set<string>();
+            if (bid.sourceChain) {
+              chains.add(bid.sourceChain);
+            }
+            bidderMap.set(bidderKey, {
+              bidder: bid.bidder,
+              amount: BigInt(bid.amount),
+              timestamp: bid.timestamp,
+              intentId: bid.intentId,
+              chains: chains,
+              bidCount: 1
+            });
+          }
+        });
+        
+        // Convert to array and sort
+        const aggregatedBids: AggregatedBid[] = Array.from(bidderMap.values()).map(b => ({
+          bidder: b.bidder,
+          amount: b.amount.toString(),
+          timestamp: b.timestamp,
+          intentId: b.intentId,
+          chains: Array.from(b.chains),
+          bidCount: b.bidCount
+        }));
+        
+        const sorted = aggregatedBids.sort((a, b) => {
           try { return BigInt(b.amount) > BigInt(a.amount) ? 1 : -1; }
           catch { return 0; }
         });
 
-        setTop(sorted.slice(0, 10));
+        setTotalBidders(sorted.length);
+        setTopBid(sorted[0] || null);
         
         if (address) {
           const myBid = sorted.find(b => b.bidder.toLowerCase() === address.toLowerCase());
@@ -43,7 +105,7 @@ export default function LiveBidLeaderboard({ auctionId }: { auctionId: string })
       } catch (e) {
         console.error('LiveBidLeaderboard poll error:', e);
       } finally {
-        if (mounted && isPolling) {
+        if (mounted) {
           timer = setTimeout(poll, 3000);
         }
       }
@@ -54,65 +116,68 @@ export default function LiveBidLeaderboard({ auctionId }: { auctionId: string })
       mounted = false;
       if (timer) clearTimeout(timer);
     };
-  }, [auctionId, address, isPolling]);
+  }, [auctionId, address, BASE]);
 
   return (
-    <div className="space-y-4 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
-      <div className="flex items-center justify-between">
-        <h4 className="text-lg font-semibold text-white">Live Bids</h4>
-        <button 
-          onClick={() => setIsPolling(p => !p)}
-          className={`px-2 py-1 rounded text-sm ${isPolling ? 'bg-green-500/20 text-green-400' : 'bg-zinc-800 text-zinc-400'}`}
-        >
-          {isPolling ? 'Live 🟢' : 'Paused ⏸️'}
-        </button>
-      </div>
+    <>
+      <div className="p-5 bg-zinc-900/50 rounded-xl border border-zinc-800 space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h4 className="text-xl font-bold text-white">Live Bids</h4>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1.5 rounded-lg text-sm bg-green-500/20 text-green-400 border border-green-500/30 font-medium">
+              🟢 Live
+            </span>
+          </div>
+        </div>
 
-      <div className="space-y-2">
-        {top.length === 0 ? (
-          <div className="text-zinc-500 text-center py-4">No bids yet</div>
-        ) : (
-          top.map((bid, i) => (
-            <div 
-              key={`${bid.bidder}-${bid.timestamp}`}
-              className={`flex items-center justify-between p-3 rounded-lg ${
-                bid.bidder.toLowerCase() === address?.toLowerCase() 
-                  ? 'bg-blue-500/20 border border-blue-500/30' 
-                  : 'bg-zinc-800/50 border border-zinc-700/50'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span className="text-zinc-500">#{i + 1}</span>
-                <span className="font-mono text-white/90">
-                  {bid.bidder.slice(0,6)}...{bid.bidder.slice(-4)}
-                </span>
-              </div>
-              <span className="font-bold text-white">
-                {ethers.formatEther(bid.amount)} ETH
-              </span>
-            </div>
-          ))
-        )}
-      </div>
-
-      {userBid && (
-        <div className="pt-4 border-t border-zinc-800">
-          <div className="text-sm text-zinc-400 mb-2">Your Latest Bid</div>
-          <div className="p-3 rounded-lg bg-blue-500/20 border border-blue-500/30">
-            <div className="flex justify-between items-center">
-              <span className="font-mono text-white/90">
-                {userBid.bidder.slice(0,6)}...{userBid.bidder.slice(-4)}
-              </span>
-              <span className="font-bold text-white">
-                {ethers.formatEther(userBid.amount)} ETH
-              </span>
-            </div>
-            <div className="text-xs text-zinc-400 mt-1">
-              {new Date(parseInt(userBid.timestamp)).toLocaleString()}
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="p-4 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+            <div className="text-sm text-zinc-400 mb-1">Total Bidders</div>
+            <div className="text-2xl font-bold text-white">{totalBidders}</div>
+          </div>
+          <div className="p-4 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+            <div className="text-sm text-zinc-400 mb-1">Highest Bid</div>
+            <div className="text-2xl font-bold text-green-400">
+              {topBid ? `$${ethers.formatUnits(topBid.amount, 6)}` : '-'}
             </div>
           </div>
         </div>
-      )}
-    </div>
+
+        {/* Your Bid */}
+        {userBid && (
+          <div className="p-4 rounded-lg bg-gradient-to-r from-blue-500/20 to-blue-600/20 border border-blue-500/30">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm text-zinc-400 mb-1">Your Total Bid</div>
+                <div className="text-2xl font-bold text-blue-400">
+                  ${ethers.formatUnits(userBid.amount, 6)}
+                </div>
+                <div className="text-xs text-zinc-500 mt-1">
+                  {userBid.chains.join(', ')} • {userBid.bidCount} {userBid.bidCount === 1 ? 'transaction' : 'transactions'}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* View All Button */}
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="w-full py-3 px-4 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 hover:border-purple-500/40 rounded-lg text-white font-medium transition-all flex items-center justify-center gap-2"
+        >
+          <span>View All Bids</span>
+          <span>→</span>
+        </button>
+      </div>
+
+      {/* Bids Modal */}
+      <BidsModal 
+        auctionId={auctionId}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
+    </>
   );
 }

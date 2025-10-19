@@ -41,9 +41,10 @@ export class AuctionHubContract {
       throw new Error(`Token ${preferdToken} not supported on chain ${preferdChain}`);
     }
 
-    // Convert prices to wei (assuming 18 decimals for most tokens)
-    const startingPriceWei = ethers.parseEther(startingPrice);
-    const reservePriceWei = reservePrice ? ethers.parseEther(reservePrice) : startingPriceWei;
+    // Convert prices to token units (6 decimals for USDC/USDT)
+    // Using 6 decimals to match the standard for stablecoins
+    const startingPriceWei = ethers.parseUnits(startingPrice, 6);
+    const reservePriceWei = reservePrice ? ethers.parseUnits(reservePrice, 6) : startingPriceWei;
 
     try {
       const tx = await this.contract.createAuction(

@@ -106,28 +106,12 @@ const handleBidSubmit = async (amount: string) => {
   }
 
   try {
-    const wei = ethers.parseEther(amount).toString();
-    const url = `${KEEPER_API_URL.replace(/\/+$/, '')}/api/bids/${encodeURIComponent(selectedAuction.intentId)}`;
-
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        bidder: address,
-        amount: wei,
-        token: selectedAuction.preferdToken ?? null,
-        sourceChain: selectedAuction.sourceChain ?? null
-      })
-    });
-
-    const json = await res.json().catch(() => null);
-    if (!res.ok || !json?.success) {
-      throw new Error(json?.error || 'Failed to place bid');
-    }
-
+    // Note: The actual bid placement happens in BidComponent.tsx
+    // The blockchain event listener will automatically pick up the bid
+    // So we just need to refresh the auctions list after the transaction
+    
     await refreshAuctions();
     setSelectedAuction(null);
-    return json.data;
   } catch (err) {
     console.error('handleBidSubmit error:', err);
     throw err;
@@ -162,7 +146,8 @@ const handleBidSubmit = async (amount: string) => {
 
   const formatPrice = (price: string) => {
     try {
-      return ethers.formatEther(price);
+      // Prices are stored as 6 decimals for USDC/USDT
+      return ethers.formatUnits(price, 6);
     } catch {
       return '0';
     }

@@ -278,7 +278,7 @@ async function settleCrossChainAuction(intentId, auction, winner, allBids, sourc
         const bidManager = new ethers_1.ethers.Contract(sourceChainConfig.bidManagerAddress, BID_MANAGER_ABI_json_1.default, new ethers_1.ethers.Wallet(config_1.CONFIG.keeperPrivateKey, sourceProvider));
         // Release the winning bid from BidManager
         console.log(`   - Releasing winning bid from BidManager on ${sourceChain}...`);
-        const releaseTx = await bidManager.releaseWinningBid(intentId, winner.bidder);
+        const releaseTx = await bidManager.releaseWinningBid(intentId, winner.bidder, auction.seller);
         await releaseTx.wait();
         console.log(`   - Winning bid released. Tx: ${releaseTx.hash}`);
         // Get initialized Nexus SDK

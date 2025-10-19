@@ -82,13 +82,13 @@ export default function AuctionTestPanel() {
         nftContract: auction.nftContract,
         tokenId: auction.tokenId.toString(),
         seller: auction.seller,
-        startingPrice: ethers.formatEther(auction.startingPrice),
-        reservePrice: ethers.formatEther(auction.reservePrice),
+        startingPrice: ethers.formatUnits(auction.startingPrice, 6),
+        reservePrice: ethers.formatUnits(auction.reservePrice, 6),
         deadline: Number(auction.deadline),
         preferdToken: auction.preferdToken,
         preferdChain: Number(auction.preferdChain),
         status: Number(auction.status) as AuctionStatus,
-        highestBid: ethers.formatEther(auction.highestBid),
+        highestBid: ethers.formatUnits(auction.highestBid, 6),
         highestBidder: auction.highestBidder
       });
 
