@@ -271,11 +271,51 @@ export default function MyAuctionsPage() {
     const bids = auctionBids[auctionId] || [];
     if (bids.length === 0) return null;
 
-    return bids.reduce((highest, current) => {
-      const currentAmount = parseFloat(ethers.formatUnits(current.amount, 6));
-      const highestAmount = parseFloat(ethers.formatUnits(highest.amount, 6));
-      return currentAmount > highestAmount ? current : highest;
+    // Aggregate bids by bidder address (same logic as LiveBid component)
+    const bidderMap = new Map<string, { 
+      bidder: string; 
+      amount: bigint; 
+      timestamp: string;
+      sourceChain: string;
+    }>();
+    
+    bids.forEach(bid => {
+      const bidderKey = bid.bidder.toLowerCase();
+      const existing = bidderMap.get(bidderKey);
+      
+      if (existing) {
+        existing.amount += BigInt(bid.amount);
+        if (parseInt(bid.timestamp) > parseInt(existing.timestamp)) {
+          existing.timestamp = bid.timestamp;
+          existing.sourceChain = bid.sourceChain;
+        }
+      } else {
+        bidderMap.set(bidderKey, {
+          bidder: bid.bidder,
+          amount: BigInt(bid.amount),
+          timestamp: bid.timestamp,
+          sourceChain: bid.sourceChain
+        });
+      }
     });
+    
+    // Convert to array and find highest
+    const aggregatedBids = Array.from(bidderMap.values());
+    if (aggregatedBids.length === 0) return null;
+    
+    const highest = aggregatedBids.reduce((max, current) => {
+      return current.amount > max.amount ? current : max;
+    });
+    
+    return {
+      bidder: highest.bidder,
+      amount: highest.amount.toString(),
+      timestamp: highest.timestamp,
+      sourceChain: highest.sourceChain,
+      token: bids[0].token,
+      intentId: bids[0].intentId,
+      transactionHash: bids[0].transactionHash
+    };
   };
 
   const canCancel = (auction: Auction) => {
@@ -470,7 +510,12 @@ export default function MyAuctionsPage() {
                           </div>
 
                           <div className="text-sm text-white/50">
-                            {bids.length} bid{bids.length !== 1 ? "s" : ""}
+                            {(() => {
+                              // Count unique bidders
+                              const bids = auctionBids[auction.intentId] || [];
+                              const uniqueBidders = new Set(bids.map(b => b.bidder.toLowerCase()));
+                              return `${uniqueBidders.size} bidder${uniqueBidders.size !== 1 ? "s" : ""}`;
+                            })()}
                           </div>
                         </div>
 
@@ -672,15 +717,52 @@ function AuctionDetailsModal({
 
           {bids.length > 0 ? (
             <div className="space-y-3 max-h-60 overflow-y-auto">
-              {bids
-                .sort(
-                  (a, b) =>
-                    parseFloat(ethers.formatUnits(b.amount, 6)) -
-                    parseFloat(ethers.formatUnits(a.amount, 6))
-                )
-                .map((bid, index) => (
+              {(() => {
+                // Aggregate bids by bidder
+                const bidderMap = new Map<string, { 
+                  bidder: string; 
+                  amount: bigint; 
+                  timestamp: string;
+                  chains: Set<string>;
+                  bidCount: number;
+                }>();
+                
+                bids.forEach(bid => {
+                  const bidderKey = bid.bidder.toLowerCase();
+                  const existing = bidderMap.get(bidderKey);
+                  
+                  if (existing) {
+                    existing.amount += BigInt(bid.amount);
+                    if (bid.sourceChain) {
+                      existing.chains.add(bid.sourceChain);
+                    }
+                    existing.bidCount += 1;
+                    if (parseInt(bid.timestamp) > parseInt(existing.timestamp)) {
+                      existing.timestamp = bid.timestamp;
+                    }
+                  } else {
+                    const chains = new Set<string>();
+                    if (bid.sourceChain) {
+                      chains.add(bid.sourceChain);
+                    }
+                    bidderMap.set(bidderKey, {
+                      bidder: bid.bidder,
+                      amount: BigInt(bid.amount),
+                      timestamp: bid.timestamp,
+                      chains: chains,
+                      bidCount: 1
+                    });
+                  }
+                });
+                
+                // Convert to array and sort
+                const aggregatedBids = Array.from(bidderMap.values()).sort((a, b) => {
+                  return b.amount > a.amount ? 1 : -1;
+                });
+                
+                return aggregatedBids.map((bid, index) => (
                   <div
-                    key={bid.transactionHash}
+                    key={bid.bidder}
                     className="bg-white/5 p-4 rounded-lg border border-white/10"
                   >
                     <div className="flex items-center justify-between">
@@ -688,7 +770,7 @@ function AuctionDetailsModal({
                         <div className="flex items-center gap-2">
                           {index === 0 && (
                             <span className="text-green-400 text-sm">
-                              👑 Highest
+                              👑 Highest Bid
                             </span>
                           )}
                           <span className="text-white/70 text-sm">
@@ -699,20 +781,25 @@ function AuctionDetailsModal({
                           {new Date(bid.timestamp).toLocaleString()}
                         </div>
                         <div className="text-white/50 text-xs">
-                          Chain:{" "}
-                          {CHAIN_NAMES[bid.sourceChain] || bid.sourceChain}
+                          Chain: {Array.from(bid.chains).map(c => CHAIN_NAMES[c] || c).join(', ')}
                         </div>
+                        {bid.bidCount > 1 && (
+                          <div className="text-white/50 text-xs">
+                            {bid.bidCount} transactions
+                          </div>
+                        )}
                       </div>
                       <div
                         className={`text-right ${
                           index === 0 ? "text-green-400" : "text-white"
                         } font-bold text-lg`}
                       >
-                        ${formatPrice(bid.amount)}
+                        ${ethers.formatUnits(bid.amount.toString(), 6)}
                       </div>
                     </div>
                   </div>
-                ))}
+                ));
+              })()}
             </div>
           ) : (
             <div className="bg-white/5 p-8 rounded-lg border border-white/10 text-center">

@@ -106,8 +106,7 @@ contract AuctionHub {
 
     // Functions to be called by the keeper to settle auctions. The keeper will 
     // also have to maintain a wallet to call these functions since they will also take 
-    // gas fees to call 
-    
+    // gas fees to call
     /**
      * @notice Called by the keeper after it determines the winner off-chain.
      * @dev Sets the winner and moves the auction to the Finalized state.
