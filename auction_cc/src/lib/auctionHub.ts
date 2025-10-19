@@ -106,10 +106,17 @@ export class AuctionHubContract {
   /**
    * Cancels an auction
    */
-  async cancelAuction(intentId: string) {
+  async cancelAuction(intentId: string): Promise<ethers.ContractTransactionReceipt> {
     try {
+      console.log("📤 Calling cancelAuction with intentId:", intentId);
+      
       const tx = await this.contract.cancelAuction(intentId);
-      return await tx.wait();
+      console.log("📤 Transaction sent:", tx.hash);
+      
+      const receipt = await tx.wait();
+      console.log("✅ Transaction confirmed:", receipt.hash);
+      
+      return receipt;
     } catch (error) {
       console.error('Error cancelling auction:', error);
       throw error;

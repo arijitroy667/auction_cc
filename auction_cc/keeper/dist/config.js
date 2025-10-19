@@ -11,7 +11,7 @@ console.log('Loading configuration...');
 // Check if required environment variables are set
 const requiredEnvVars = [
     'KEEPER_PRIVATE_KEY',
-    'ETHEREUM_RPC_URL',
+    'SEPOLIA_RPC_URL',
     'ARBITRUM_SEPOLIA_RPC_URL',
     'BASE_SEPOLIA_RPC_URL',
     'OPTIMISM_SEPOLIA_RPC_URL'
@@ -28,7 +28,7 @@ exports.CONFIG = {
         ethereum: {
             id: 11155111,
             name: "ethereum",
-            rpcUrl: process.env.ETHEREUM_RPC_URL,
+            rpcUrl: process.env.SEPOLIA_RPC_URL,
             auctionHubAddress: "0x6f40FE2D6705795615a863372cFe25De08af0EE9",
             bidManagerAddress: "0xD16F07385e4f073E9b060beC84840A1B327910e3",
         },

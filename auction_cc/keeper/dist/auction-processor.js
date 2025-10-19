@@ -300,9 +300,9 @@ async function settleCrossChainAuction(intentId, auction, winner, allBids, sourc
             const bridgeResult = await nexusSDK.transfer({
                 token: winnerTokenSymbol,
                 amount: bidAmount.toString(),
-                chainId: targetChainConfig.id,
+                chainId: Number(targetChainConfig.id),
                 recipient: auction.seller,
-                sourceChains: [sourceChainConfig.id],
+                sourceChains: [Number(sourceChainConfig.id)],
             });
             console.log(`   - Bridge transaction successful: ${bridgeResult}`);
         }
@@ -355,8 +355,8 @@ async function settleCrossChainAuction(intentId, auction, winner, allBids, sourc
             const bridgeAndExecuteResult = await nexusSDK.bridgeAndExecute({
                 token: winnerTokenSymbol,
                 amount: bidAmount.toString(),
-                toChainId: targetChainConfig.id,
-                sourceChains: [sourceChainConfig.id],
+                toChainId: Number(targetChainConfig.id),
+                sourceChains: [Number(sourceChainConfig.id)],
                 execute: {
                     contractAddress: swapRouter02Address,
                     contractAbi: SWAP_ROUTER02_ABI,

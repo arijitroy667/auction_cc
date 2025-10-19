@@ -98,29 +98,20 @@ export async function startEventListeners() {
 
             // Listen for new bid events (real-time)
             bidManagerContract.on("BidPlaced", (intentId, bidder, token, amount, event) => {
-                // Debug: Log the event structure
-                console.log(`🔍 DEBUG - Event structure on ${chain.name}:`, {
-                    transactionHash: event.transactionHash,
-                    logIndex: event.logIndex,
-                    index: event.index,
-                    blockNumber: event.blockNumber,
-                    eventKeys: Object.keys(event)
-                });
-                
-                // Create unique event identifier to prevent duplicates
-                // Use a combination of txHash and blockNumber as fallback if logIndex is undefined
+                // Create unique event identifier INCLUDING intentId to prevent false duplicates
                 const logId = event.logIndex !== undefined ? event.logIndex : 
                              event.index !== undefined ? event.index : 
                              event.blockNumber || Math.random();
-                const eventId = `${event.transactionHash}-${logId}-bid`;
+                // FIXED: Include intentId in the event ID to handle multiple bids in same tx
+                const eventId = `${event.transactionHash}-${logId}-bid-${intentId}`;
                 
-                console.log(`🎯 Created event ID: ${eventId}`);
+                console.log(`🎯 Created bid event ID: ${eventId}`);
                 
-                // Skip if we've already processed this event
-                if (processedEvents.has(eventId)) {
-                    console.log(`   - Skipping duplicate bid event: ${eventId}`);
-                    return;
-                }
+                // // Skip if we've already processed this event
+                // if (processedEvents.has(eventId)) {
+                //     console.log(`   - Skipping duplicate bid event: ${eventId}`);
+                //     return;
+                // }
                 
                 processedEvents.add(eventId);
                 
@@ -148,8 +139,15 @@ export async function startEventListeners() {
 
                 // Listen for new auction events (real-time)
                 auctionHub.on("AuctionCreated", (intentId, seller, nftContract, tokenId, startingPrice, reservePrice, deadline, preferdToken, preferdChain, event) => {
-                    // Create unique event identifier to prevent duplicates
-                    const eventId = `${event.transactionHash}-${event.logIndex || event.index || 0}-auction`;
+                    // FIXED: Create unique event identifier INCLUDING auction-specific parameters
+                    const logId = event.logIndex !== undefined ? event.logIndex : 
+                                 event.index !== undefined ? event.index : 
+                                 event.blockNumber || Math.random();
+                    
+                    // Include intentId AND key auction parameters to prevent false duplicates
+                    const eventId = `${event.transactionHash}-${logId}-auction-${intentId}-${nftContract}-${tokenId}`;
+                    
+                    console.log(`🎯 Created auction event ID: ${eventId}`);
                     
                     // Skip if we've already processed this event
                     if (processedEvents.has(eventId)) {
@@ -183,7 +181,42 @@ export async function startEventListeners() {
                     addAuction(intentId, auction);
                 });
 
-                totalListeners++;
+// Listen for auction cancelled events (real-time)
+auctionHub.on("AuctionCancelled", (intentId, event) => {
+    const logId = event.logIndex !== undefined ? event.logIndex : 
+                 event.index !== undefined ? event.index : 
+                 event.blockNumber || Math.random();
+    
+    const eventId = `${event.transactionHash}-${logId}-cancelled-${intentId}`;
+    
+    console.log(`🎯 Created auction cancelled event ID: ${eventId}`);
+    
+    // Skip if we've already processed this event
+    if (processedEvents.has(eventId)) {
+        console.log(`   - Skipping duplicate cancelled event: ${eventId}`);
+        return;
+    }
+    
+    processedEvents.add(eventId);
+    
+    console.log(`🚫 AUCTION CANCELLED EVENT DETECTED on ${chain.name}!`);
+    console.log(`   Intent ID: ${intentId}`);
+    console.log(`   TX Hash: ${event.transactionHash}`);
+    
+    // Update the auction status to cancelled
+    const existingAuction = auctionStore.get(intentId);
+    if (existingAuction) {
+        existingAuction.status = 3; // Cancelled status
+        existingAuction.cancelTxHash = event.transactionHash;
+        existingAuction.cancelTimestamp = new Date().toISOString();
+        
+        auctionStore.set(intentId, existingAuction);
+        console.log(`[+] Auction ${intentId.slice(0, 10)}... marked as CANCELLED`);
+    } else {
+        console.warn(`   - Auction ${intentId} not found in store for cancellation update`);
+    }
+});
+                totalListeners+=2;
                 console.log(`   - ✅ Listening for auctions on ${chain.name} AuctionHub`);
             }
 
