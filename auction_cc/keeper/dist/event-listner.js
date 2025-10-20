@@ -131,11 +131,11 @@ async function startEventListeners() {
                     // Include intentId AND key auction parameters to prevent false duplicates
                     const eventId = `${event.transactionHash}-${logId}-auction-${intentId}-${nftContract}-${tokenId}`;
                     console.log(`🎯 Created auction event ID: ${eventId}`);
-                    // Skip if we've already processed this event
-                    if (processedEvents.has(eventId)) {
-                        console.log(`   - Skipping duplicate auction event: ${eventId}`);
-                        return;
-                    }
+                    // // Skip if we've already processed this event
+                    // if (processedEvents.has(eventId)) {
+                    //     console.log(`   - Skipping duplicate auction event: ${eventId}`);
+                    //     return;
+                    // }
                     processedEvents.add(eventId);
                     console.log(`🎉 AuctionCreated EVENT DETECTED on ${chain.name}!`);
                     console.log(`   Intent ID: ${intentId}`);

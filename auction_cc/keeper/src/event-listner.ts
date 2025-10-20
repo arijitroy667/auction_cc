@@ -149,11 +149,11 @@ export async function startEventListeners() {
                     
                     console.log(`🎯 Created auction event ID: ${eventId}`);
                     
-                    // Skip if we've already processed this event
-                    if (processedEvents.has(eventId)) {
-                        console.log(`   - Skipping duplicate auction event: ${eventId}`);
-                        return;
-                    }
+                    // // Skip if we've already processed this event
+                    // if (processedEvents.has(eventId)) {
+                    //     console.log(`   - Skipping duplicate auction event: ${eventId}`);
+                    //     return;
+                    // }
                     
                     processedEvents.add(eventId);
                     

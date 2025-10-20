@@ -236,7 +236,7 @@ export default function MyAuctionsPage() {
     if (isConnected && address) {
       fetchMyAuctions();
       // Auto-refresh every 30 seconds
-      const interval = setInterval(fetchMyAuctions, 30000);
+      const interval = setInterval(fetchMyAuctions, 5000);
       return () => clearInterval(interval);
     }
   }, [isConnected, address]);
@@ -250,13 +250,21 @@ export default function MyAuctionsPage() {
 
     const hours = Math.floor(secondsLeft / 3600);
     const minutes = Math.floor((secondsLeft % 3600) / 60);
+    const seconds = secondsLeft % 60;
 
-    if (hours > 24) {
-      const days = Math.floor(hours / 24);
-      return `${days}d ${hours % 24}h`;
+    // For auctions under 1 hour, show minutes and seconds
+    if (hours === 0) {
+      return `${minutes}m ${seconds}s`;
     }
 
-    return `${hours}h ${minutes}m`;
+    // For longer auctions, show hours and minutes
+    if (hours < 24) {
+      return `${hours}h ${minutes}m`;
+    }
+
+    // For very long auctions, show days
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h`;
   };
 
   const formatPrice = (price: string) => {
@@ -272,17 +280,20 @@ export default function MyAuctionsPage() {
     if (bids.length === 0) return null;
 
     // Aggregate bids by bidder address (same logic as LiveBid component)
-    const bidderMap = new Map<string, { 
-      bidder: string; 
-      amount: bigint; 
-      timestamp: string;
-      sourceChain: string;
-    }>();
-    
-    bids.forEach(bid => {
+    const bidderMap = new Map<
+      string,
+      {
+        bidder: string;
+        amount: bigint;
+        timestamp: string;
+        sourceChain: string;
+      }
+    >();
+
+    bids.forEach((bid) => {
       const bidderKey = bid.bidder.toLowerCase();
       const existing = bidderMap.get(bidderKey);
-      
+
       if (existing) {
         existing.amount += BigInt(bid.amount);
         if (parseInt(bid.timestamp) > parseInt(existing.timestamp)) {
@@ -294,19 +305,19 @@ export default function MyAuctionsPage() {
           bidder: bid.bidder,
           amount: BigInt(bid.amount),
           timestamp: bid.timestamp,
-          sourceChain: bid.sourceChain
+          sourceChain: bid.sourceChain,
         });
       }
     });
-    
+
     // Convert to array and find highest
     const aggregatedBids = Array.from(bidderMap.values());
     if (aggregatedBids.length === 0) return null;
-    
+
     const highest = aggregatedBids.reduce((max, current) => {
       return current.amount > max.amount ? current : max;
     });
-    
+
     return {
       bidder: highest.bidder,
       amount: highest.amount.toString(),
@@ -314,7 +325,7 @@ export default function MyAuctionsPage() {
       sourceChain: highest.sourceChain,
       token: bids[0].token,
       intentId: bids[0].intentId,
-      transactionHash: bids[0].transactionHash
+      transactionHash: bids[0].transactionHash,
     };
   };
 
@@ -513,8 +524,12 @@ export default function MyAuctionsPage() {
                             {(() => {
                               // Count unique bidders
                               const bids = auctionBids[auction.intentId] || [];
-                              const uniqueBidders = new Set(bids.map(b => b.bidder.toLowerCase()));
-                              return `${uniqueBidders.size} bidder${uniqueBidders.size !== 1 ? "s" : ""}`;
+                              const uniqueBidders = new Set(
+                                bids.map((b) => b.bidder.toLowerCase())
+                              );
+                              return `${uniqueBidders.size} bidder${
+                                uniqueBidders.size !== 1 ? "s" : ""
+                              }`;
                             })()}
                           </div>
                         </div>
@@ -719,25 +734,30 @@ function AuctionDetailsModal({
             <div className="space-y-3 max-h-60 overflow-y-auto">
               {(() => {
                 // Aggregate bids by bidder
-                const bidderMap = new Map<string, { 
-                  bidder: string; 
-                  amount: bigint; 
-                  timestamp: string;
-                  chains: Set<string>;
-                  bidCount: number;
-                }>();
-                
-                bids.forEach(bid => {
+                const bidderMap = new Map<
+                  string,
+                  {
+                    bidder: string;
+                    amount: bigint;
+                    timestamp: string;
+                    chains: Set<string>;
+                    bidCount: number;
+                  }
+                >();
+
+                bids.forEach((bid) => {
                   const bidderKey = bid.bidder.toLowerCase();
                   const existing = bidderMap.get(bidderKey);
-                  
+
                   if (existing) {
                     existing.amount += BigInt(bid.amount);
                     if (bid.sourceChain) {
                       existing.chains.add(bid.sourceChain);
                     }
                     existing.bidCount += 1;
-                    if (parseInt(bid.timestamp) > parseInt(existing.timestamp)) {
+                    if (
+                      parseInt(bid.timestamp) > parseInt(existing.timestamp)
+                    ) {
                       existing.timestamp = bid.timestamp;
                     }
                   } else {
@@ -750,16 +770,18 @@ function AuctionDetailsModal({
                       amount: BigInt(bid.amount),
                       timestamp: bid.timestamp,
                       chains: chains,
-                      bidCount: 1
+                      bidCount: 1,
                     });
                   }
                 });
-                
+
                 // Convert to array and sort
-                const aggregatedBids = Array.from(bidderMap.values()).sort((a, b) => {
-                  return b.amount > a.amount ? 1 : -1;
-                });
-                
+                const aggregatedBids = Array.from(bidderMap.values()).sort(
+                  (a, b) => {
+                    return b.amount > a.amount ? 1 : -1;
+                  }
+                );
+
                 return aggregatedBids.map((bid, index) => (
                   <div
                     key={bid.bidder}
@@ -781,7 +803,10 @@ function AuctionDetailsModal({
                           {new Date(bid.timestamp).toLocaleString()}
                         </div>
                         <div className="text-white/50 text-xs">
-                          Chain: {Array.from(bid.chains).map(c => CHAIN_NAMES[c] || c).join(', ')}
+                          Chain:{" "}
+                          {Array.from(bid.chains)
+                            .map((c) => CHAIN_NAMES[c] || c)
+                            .join(", ")}
                         </div>
                         {bid.bidCount > 1 && (
                           <div className="text-white/50 text-xs">

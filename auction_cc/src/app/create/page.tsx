@@ -7,6 +7,7 @@ import Navbar from "@/components/navbar";
 import Link from "next/link";
 import { ethers } from "ethers";
 import { getAuctionHubContract } from "@/lib/auctionHub";
+import { useRouter } from "next/navigation";
 import {
   SUPPORTED_TOKENS,
   CHAIN_NAMES,
@@ -18,17 +19,18 @@ import {
 export default function CreateAuctionPage() {
   const { isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const router = useRouter();
   const [initialized, setInitialized] = useState(isInitialized());
   const [isCreating, setIsCreating] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
 
-  // Auction form state
+  // Auction form state - Default to 2 minutes
   const [auctionForm, setAuctionForm] = useState({
     nftContract: "",
     tokenId: "",
     startingPrice: "",
     reservePrice: "",
-    durationHours: "",
+    durationHours: "0.033", // 2 minutes = 0.033 hours (2/60)
     preferdToken: "" as SupportedToken | "",
     preferdChain: "1",
   });
@@ -117,6 +119,13 @@ export default function CreateAuctionPage() {
       return;
     }
 
+    // Validate duration (minimum 2 minutes)
+    const durationMinutes = parseFloat(auctionForm.durationHours) * 60;
+    if (durationMinutes < 2) {
+      alert("Auction duration must be at least 2 minutes");
+      return;
+    }
+
     // Validate that starting price is greater than reserve price
     const startingPriceNum = parseFloat(auctionForm.startingPrice);
     const reservePriceNum = parseFloat(auctionForm.reservePrice);
@@ -185,10 +194,10 @@ export default function CreateAuctionPage() {
       // Get contract instance
       const auctionHubContract = getAuctionHubContract(signer);
 
-      // Calculate deadline
+      // Calculate deadline - convert hours to seconds
       const deadline =
         Math.floor(Date.now() / 1000) +
-        parseInt(auctionForm.durationHours) * 3600;
+        parseFloat(auctionForm.durationHours) * 3600;
 
       // Create auction parameters
       const params = {
@@ -206,7 +215,18 @@ export default function CreateAuctionPage() {
       // Create the auction
       const intentId = await auctionHubContract.createAuction(params);
 
-      alert(`Auction created successfully! Intent ID: ${intentId}`);
+      // Show success message with options
+      const userChoice = confirm(
+        `Auction created successfully! Intent ID: ${intentId}\n\n` +
+          `Your auction may take a few moments to appear in "My Auctions" as our keeper processes the blockchain event.\n\n` +
+          `Would you like to go to "My Auctions" page now?`
+      );
+
+      if (userChoice) {
+        // Navigate to My Auctions page with parameter
+        router.push("/my_auctions?from=create");
+      }
+
       console.log("Auction created with Intent ID:", intentId);
 
       // Reset form
@@ -215,7 +235,7 @@ export default function CreateAuctionPage() {
         tokenId: "",
         startingPrice: "",
         reservePrice: "",
-        durationHours: "",
+        durationHours: "0.033", // Reset to 2 minutes default
         preferdToken: "",
         preferdChain: "1",
       });
@@ -246,7 +266,8 @@ export default function CreateAuctionPage() {
                   Create Auction
                 </h1>
                 <p className="text-white/70">
-                  List your NFT for auction across multiple blockchains
+                  List your NFT for auction across multiple blockchains (2min
+                  minimum)
                 </p>
               </div>
               <Link
@@ -256,6 +277,34 @@ export default function CreateAuctionPage() {
                 Browse Auctions
               </Link>
             </div>
+
+            {/* Test Mode for Development */}
+            {process.env.NODE_ENV === "development" && (
+              <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <h3 className="text-yellow-300 font-semibold mb-2">
+                  🧪 Test Mode
+                </h3>
+                <p className="text-yellow-300/70 text-sm mb-3">
+                  Quick setup for testing short auctions
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuctionForm({
+                      ...auctionForm,
+                      nftContract: "0x1234567890123456789012345678901234567890", // Example NFT
+                      tokenId: "1",
+                      startingPrice: "1",
+                      reservePrice: "5",
+                      durationHours: (2 / 60).toString(), // 2 minutes
+                    });
+                  }}
+                  className="px-4 py-2 bg-yellow-500/20 text-yellow-300 rounded font-medium hover:bg-yellow-500/30"
+                >
+                  Fill Test Data (2min auction)
+                </button>
+              </div>
+            )}
 
             {/* Form */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -345,26 +394,102 @@ export default function CreateAuctionPage() {
               {/* Right Column - Additional Settings */}
               <div className="space-y-6">
                 <div>
-                  <label className="block text-white font-medium mb-2">
-                    Auction Duration (Hours) *
+                  <label className="block text-white/70 text-sm font-medium mb-2">
+                    Duration (Minutes) *
                   </label>
-                  <select
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white backdrop-blur-sm focus:outline-none focus:border-blue-400 transition-colors"
-                    value={auctionForm.durationHours}
-                    onChange={(e) =>
-                      setAuctionForm({
-                        ...auctionForm,
-                        durationHours: e.target.value,
-                      })
+                  <input
+                    type="number"
+                    min="2" // Minimum 2 minutes
+                    max="10080" // Maximum 7 days in minutes
+                    step="1"
+                    placeholder="2"
+                    value={
+                      auctionForm.durationHours
+                        ? Math.round(
+                            parseFloat(auctionForm.durationHours) * 60
+                          ).toString()
+                        : ""
                     }
-                  >
-                    <option value="">Select duration</option>
-                    <option value="1">1 Hour</option>
-                    <option value="6">6 Hours</option>
-                    <option value="24">24 Hours</option>
-                    <option value="72">3 Days</option>
-                    <option value="168">7 Days</option>
-                  </select>
+                    onChange={(e) => {
+                      const minutes = parseFloat(e.target.value) || 0;
+                      if (minutes < 2 && minutes > 0) {
+                        alert("Minimum auction duration is 2 minutes");
+                        return;
+                      }
+                      const hours =
+                        minutes > 0 ? (minutes / 60).toString() : "";
+                      setAuctionForm({ ...auctionForm, durationHours: hours });
+                    }}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-white/40 focus:bg-white/10"
+                  />
+                  <p className="text-white/50 text-sm mt-1">
+                    Auction will run for{" "}
+                    {auctionForm.durationHours
+                      ? Math.round(parseFloat(auctionForm.durationHours) * 60)
+                      : 0}{" "}
+                    minutes (minimum 2 minutes)
+                  </p>
+
+                  {/* Quick duration buttons */}
+                  <div className="flex gap-2 mt-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAuctionForm({
+                          ...auctionForm,
+                          durationHours: (2 / 60).toString(),
+                        })
+                      }
+                      className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded text-xs hover:bg-blue-500/30"
+                    >
+                      2 min
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAuctionForm({
+                          ...auctionForm,
+                          durationHours: (5 / 60).toString(),
+                        })
+                      }
+                      className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded text-xs hover:bg-blue-500/30"
+                    >
+                      5 min
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAuctionForm({
+                          ...auctionForm,
+                          durationHours: (10 / 60).toString(),
+                        })
+                      }
+                      className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded text-xs hover:bg-blue-500/30"
+                    >
+                      10 min
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAuctionForm({
+                          ...auctionForm,
+                          durationHours: (30 / 60).toString(),
+                        })
+                      }
+                      className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded text-xs hover:bg-blue-500/30"
+                    >
+                      30 min
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setAuctionForm({ ...auctionForm, durationHours: "1" })
+                      }
+                      className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded text-xs hover:bg-blue-500/30"
+                    >
+                      1 hour
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -479,6 +604,12 @@ export default function CreateAuctionPage() {
                   <span className="text-blue-400 mt-1">•</span>
                   <strong className="text-white">
                     Starting price must be greater than reserve price
+                  </strong>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-400 mt-1">•</span>
+                  <strong className="text-orange-300">
+                    Minimum auction duration is 2 minutes
                   </strong>
                 </li>
                 <li className="flex items-start gap-2">

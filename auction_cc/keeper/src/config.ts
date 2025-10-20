@@ -28,37 +28,37 @@ export const CONFIG = {
       id: 11155111,
       name: "ethereum",
       rpcUrl: process.env.SEPOLIA_RPC_URL!,
-      auctionHubAddress: "0x6f40FE2D6705795615a863372cFe25De08af0EE9",
-      bidManagerAddress: "0xD16F07385e4f073E9b060beC84840A1B327910e3",
+      auctionHubAddress: "0x5acC198CC747E0e12571E7BDFFfb7Cd7ab1f82aA",
+      bidManagerAddress: "0x9042E8cFe2C44f1ab71009aD4e055632B11f9f8d",
     },
     arbitrumSepolia: {
       id: 421614,
       name: "arbitrumSepolia",
       rpcUrl: process.env.ARBITRUM_SEPOLIA_RPC_URL!,
-      auctionHubAddress: "0x6f40FE2D6705795615a863372cFe25De08af0EE9",
-      bidManagerAddress: "0xD16F07385e4f073E9b060beC84840A1B327910e3",
+      auctionHubAddress: "0x5acC198CC747E0e12571E7BDFFfb7Cd7ab1f82aA",
+      bidManagerAddress: "0x9042E8cFe2C44f1ab71009aD4e055632B11f9f8d",
     },
     base: {
       id: 84532,
       name: "base",
       rpcUrl: process.env.BASE_SEPOLIA_RPC_URL!,
-      auctionHubAddress: "0x6f40FE2D6705795615a863372cFe25De08af0EE9",
-      bidManagerAddress: "0xD16F07385e4f073E9b060beC84840A1B327910e3",
+      auctionHubAddress: "0x5acC198CC747E0e12571E7BDFFfb7Cd7ab1f82aA",
+      bidManagerAddress: "0x9042E8cFe2C44f1ab71009aD4e055632B11f9f8d",
     },
     optimism:{
       id: 11155420,
       name: "optimism",
       rpcUrl: process.env.OPTIMISM_SEPOLIA_RPC_URL!,
-      auctionHubAddress: "0x6f40FE2D6705795615a863372cFe25De08af0EE9",
-      bidManagerAddress: "0xD16F07385e4f073E9b060beC84840A1B327910e3",
+      auctionHubAddress: "0x5acC198CC747E0e12571E7BDFFfb7Cd7ab1f82aA",
+      bidManagerAddress: "0x9042E8cFe2C44f1ab71009aD4e055632B11f9f8d",
     }
   },
   // Process auctions every 2 minutes
-  processingInterval: parseInt(process.env.PROCESSING_INTERVAL || '120000'), // 2 minutes default
+  processingInterval: parseInt(process.env.PROCESSING_INTERVAL || '10000'), // 10 s default
 };
 
 console.log('✅ Configuration loaded successfully');
-console.log('📊 Processing interval:', CONFIG.processingInterval + 'ms');
+console.log('📊 Processing interval:', CONFIG.processingInterval + 'ms (' + (CONFIG.processingInterval/1000) + 's)');
 console.log('🔗 Chains configured:', Object.keys(CONFIG.chains).length);
-console.log('🎧 Event listeners will remain active continuously');
+console.log('⏰ Optimized for short auctions (2min minimum)');
 console.log('-------------------------------------------------------------');
