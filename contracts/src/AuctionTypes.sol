@@ -56,6 +56,7 @@ library AuctionTypes {
      * @param amount Amount of tokens bid
      * @param timestamp Unix timestamp when the bid was placed
      * @param settled Whether the bid has been settled/processed
+     * @param sourceChain Chain ID where the bid was placed (locked after first bid)
      */
     struct Bid {
         bytes32 intentId;
@@ -64,5 +65,6 @@ library AuctionTypes {
         uint256 amount;
         uint256 timestamp;
         bool settled;
+        uint8 sourceChain;
     }
 }

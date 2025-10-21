@@ -5,7 +5,6 @@ import { useAccount } from "wagmi";
 import { isInitialized } from "@/lib/nexus/nexusClient";
 import { result } from "@/components/unified_balance/fetch-unified-balance";
 import Navbar from "@/components/navbar";
-import AuctionTestPanel from "@/components/auction-test-panel";
 import Link from "next/link";
 
 export default function Page() {
@@ -142,11 +141,6 @@ export default function Page() {
                 <h3 className="text-green-300 font-semibold mb-2">🎉 You're all set!</h3>
                 <p className="text-green-300/80">Your wallet is connected and Nexus is initialized. Start exploring auctions!</p>
               </div>
-            )}
-
-            {/* Test Panel - Always show when connected */}
-            {isConnected && (
-              <AuctionTestPanel />
             )}
           </section>
         </main>

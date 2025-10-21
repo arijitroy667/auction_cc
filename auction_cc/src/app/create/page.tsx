@@ -278,34 +278,6 @@ export default function CreateAuctionPage() {
               </Link>
             </div>
 
-            {/* Test Mode for Development */}
-            {process.env.NODE_ENV === "development" && (
-              <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                <h3 className="text-yellow-300 font-semibold mb-2">
-                  🧪 Test Mode
-                </h3>
-                <p className="text-yellow-300/70 text-sm mb-3">
-                  Quick setup for testing short auctions
-                </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuctionForm({
-                      ...auctionForm,
-                      nftContract: "0x1234567890123456789012345678901234567890", // Example NFT
-                      tokenId: "1",
-                      startingPrice: "1",
-                      reservePrice: "5",
-                      durationHours: (2 / 60).toString(), // 2 minutes
-                    });
-                  }}
-                  className="px-4 py-2 bg-yellow-500/20 text-yellow-300 rounded font-medium hover:bg-yellow-500/30"
-                >
-                  Fill Test Data (2min auction)
-                </button>
-              </div>
-            )}
-
             {/* Form */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Left Column - Form Fields */}

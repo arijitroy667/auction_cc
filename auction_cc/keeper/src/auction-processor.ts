@@ -1,118 +1,39 @@
-import { TransferParams, 
-    TransferResult,
-    BridgeAndExecuteParams, 
-    BridgeAndExecuteResult,
-    ExecuteParams,
-    ExecuteResult} from '@avail-project/nexus-core';
 import {ethers} from "ethers";
 import {CONFIG} from "./config";
 import { getAllAuctions,getBids } from "./event-listner";
 import AUCTION_HUB_ABI from "../src/ABI/AUCTION_HUB_ABI.json";
 import BID_MANAGER_ABI from "../src/ABI/BID_MANAGER_ABI.json";
 
-// Nexus SDK instance - will be initialized dynamically
-let _nexusSDK: any | null = null;
+// AuctionStatus enum values (must match AuctionTypes.sol)
+const AuctionStatus = {
+    Created: 0,
+    Active: 1,
+    Finalized: 2,
+    Settled: 3,
+    Cancelled: 4
+} as const;
 
-async function getNexusSDK(): Promise<any> {
-    if (_nexusSDK) return _nexusSDK;
-    
-    try {
-        const { NexusSDK } = await import('@avail-project/nexus-core');
-        _nexusSDK = new NexusSDK({ network: 'testnet' });
-        
-        // Initialize with provider created from keeper's private key
-        // Use the first chain's RPC as the primary provider
-        const primaryChain = Object.values(CONFIG.chains)[0];
-        const provider = new ethers.JsonRpcProvider(primaryChain.rpcUrl);
-        const keeperWallet = new ethers.Wallet(CONFIG.keeperPrivateKey, provider);
-        
-        console.log(`[*] Initializing Nexus SDK with keeper wallet: ${keeperWallet.address}`);
-        await _nexusSDK.initialize(keeperWallet);
-        
-        console.log(`[✓] Nexus SDK initialized successfully`);
-        return _nexusSDK;
-    } catch (error) {
-        console.error('Failed to initialize Nexus SDK:', error);
-        const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`Nexus SDK initialization failed: ${message}`);
-    }
-}
-
-// Uniswap SwapRouter02 addresses for different chains
-const UNISWAP_SWAP_ROUTER02_ADDRESSES: { [chainId: number]: string } = {
-    11155111: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Ethereum Sepolia
-    421614: "0x101F443B4d1b059569D643917553c771E1b9663E", // Arbitrum Sepolia
-    84532: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4", // Base Sepolia
-};
-
-// SwapRouter02 ABI for exactInputSingle function
-const SWAP_ROUTER02_ABI = [
-    {
-        inputs: [
-            {
-                components: [
-                    { internalType: 'address', name: 'tokenIn', type: 'address' },
-                    { internalType: 'address', name: 'tokenOut', type: 'address' },
-                    { internalType: 'uint24', name: 'fee', type: 'uint24' },
-                    { internalType: 'address', name: 'recipient', type: 'address' },
-                    { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
-                    { internalType: 'uint256', name: 'amountOutMinimum', type: 'uint256' },
-                    { internalType: 'uint160', name: 'sqrtPriceLimitX96', type: 'uint160' }
-                ],
-                internalType: 'struct IV3SwapRouter.ExactInputSingleParams',
-                name: 'params',
-                type: 'tuple'
-            }
-        ],
-        name: 'exactInputSingle',
-        outputs: [{ internalType: 'uint256', name: 'amountOut', type: 'uint256' }],
-        stateMutability: 'payable',
-        type: 'function'
-    }
-];
-
-function getSwapRouter02Address(chainId: number): string {
-    const routerAddress = UNISWAP_SWAP_ROUTER02_ADDRESSES[chainId];
-    if (!routerAddress) {
-        throw new Error(`Uniswap SwapRouter02 not available on chain ${chainId}`);
-    }
-    return routerAddress;
-}
+// Processing lock to prevent concurrent processing of the same auction
+const processingLocks = new Set<string>();
 
 function getChainConfig(chainIdentifier: string | number) {
-    console.log(`[DEBUG] Looking for chain config: "${chainIdentifier}"`);
-    console.log(`[DEBUG] Available chains:`, Object.keys(CONFIG.chains));
     
     const chains = Object.values(CONFIG.chains);
     let config;
     
-    // If identifier looks like an integer or is a number, match by id
     if (typeof chainIdentifier === "number" || /^\d+$/.test(String(chainIdentifier))) {
         const id = Number(chainIdentifier);
         config = chains.find(c => Number(c.id) === id);
         if (!config) {
             console.error(`[ERROR] Chain not found by id: "${chainIdentifier}"`);
             console.error(`[ERROR] Available chain ids:`, chains.map(c => c.id));
-        } else {
-            console.log(`[DEBUG] Found chain config for id ${chainIdentifier}:`, {
-                id: config.id,
-                name: config.name,
-                rpcUrl: config.rpcUrl?.slice(0, 50) + '...'
-            });
-        }
+        } 
     } else {
-        // Otherwise match by name
         config = chains.find(c => c.name === chainIdentifier);
         if (!config) {
             console.error(`[ERROR] Chain not found by name: "${chainIdentifier}"`);
             console.error(`[ERROR] Available chain names:`, chains.map(c => c.name));
-        } else {
-            console.log(`[DEBUG] Found chain config for ${chainIdentifier}:`, {
-                id: config.id,
-                name: config.name,
-                rpcUrl: config.rpcUrl?.slice(0, 50) + '...'
-            });
-        }
+        } 
     }
     
     return config;
@@ -246,30 +167,19 @@ function validateStableCoinOnlyAuction(winnerToken: string, requiredToken: strin
 }
 
 export async function processEndedAuctions() {
-  console.log(`\n[*] Processing ended auctions... (${new Date().toLocaleTimeString()}) - 10s interval`);
-
     const allAuctions = getAllAuctions();
     const currentTime = Math.floor(Date.now() / 1000);
 
     if (allAuctions.size === 0) {
-        console.log("   - No auctions found in store");
         return;
     }
 
-    console.log(`   - Found ${allAuctions.size} auctions to check`);
-
     for (const [intentId, auctionData] of allAuctions.entries()) {
         try {
-            // Debug logging to see the actual auction data structure
-            console.log(`[DEBUG] Processing auction ${intentId.slice(0, 10)}...`);
-            console.log(`[DEBUG] Auction data:`, {
-                sourceChain: auctionData.sourceChain,
-                status: auctionData.status,
-                deadline: auctionData.deadline,
-                seller: auctionData.seller?.slice(0, 10) + '...'
-            });
+            if (processingLocks.has(intentId)) {
+                continue;
+            }
 
-            // FIXED: Use sourceChain instead of chain
             const auctionChain = getChainConfig(auctionData.sourceChain);
             if (!auctionChain) {
                 console.error(`[-] Unknown chain: ${auctionData.sourceChain} for auction ${intentId.slice(0, 10)}...`);
@@ -297,107 +207,144 @@ export async function processEndedAuctions() {
             const auctionDeadline = Number(auction.deadline);
             const timeLeft = auctionDeadline - currentTime;
             
-            // Log auctions ending soon
-            if (timeLeft > 0 && timeLeft <= 120) { // 2 minutes or less
-                console.log(`   - ⚠️  Auction ${intentId.slice(0, 10)}... ending soon! ${timeLeft}s remaining`);
-            } else if (timeLeft <= 0) {
+            if (timeLeft <= 0) {
                 console.log(`   - 🔥 Auction ${intentId.slice(0, 10)}... has ended! Processing now...`);
             }
 
             const auctionStatus = Number(auction.status);
 
-            console.log(`   - Auction ${intentId.slice(0, 10)}... status: ${auctionStatus}, deadline: ${auctionDeadline}, current: ${currentTime}`);
-
-            // Skip if auction hasn't ended or is not active
+            // Skip if auction hasn't ended
             if (auctionDeadline > currentTime) {
-                console.log(`   - Auction ${intentId.slice(0, 10)}... has not ended yet`);
                 continue;
             }
 
-            // if (auctionStatus !== 0 /* Active */) {
-            //     console.log(`   - Auction ${intentId.slice(0, 10)}... is not active (status: ${auctionStatus})`);
-            //     continue;
-            // }
+            // Skip if already settled or cancelled
+            if (auctionStatus === AuctionStatus.Settled || auctionStatus === AuctionStatus.Cancelled) {
+                console.log(`   - Auction ${intentId.slice(0, 10)}... already completed (status: ${auctionStatus}), skipping...`);
+                continue;
+            }
 
             console.log(`[!] Auction ${intentId.slice(0, 10)}... on ${auctionData.sourceChain} has ended. Processing...`);
+
+            // Acquire processing lock to prevent concurrent processing
+            processingLocks.add(intentId);
+            console.log(`   - 🔒 Processing lock acquired for auction ${intentId.slice(0, 10)}...`);
 
             const bids = getBids(intentId);
             console.log(`   - Found ${bids.length} bids for this auction`);
 
+
             if (bids.length === 0) {
-                console.log("   - No bids found. Returning NFT to seller...");
-                try {
-                    const cancelTx = await auctionHub.connect(keeperWallet).cancelAuction(intentId);
-                    await cancelTx.wait();
-                    console.log(`   - NFT returned to seller. Tx: ${cancelTx.hash}`);
-                    
-                    // Update local auction status
-                    auctionData.status = 3; // Cancelled
-                    allAuctions.set(intentId, auctionData);
-                } catch (error) {
-                    console.error("   - Failed to return NFT:", error);
-                }
+                console.log("   - No bids found. Auction needs to be cancelled by seller (keeper cannot cancel).");
+                // Note: cancelAuction() requires seller to call it, not keeper
+                // The seller will need to call cancelAuction() manually
+                // TODO: Add a keeper-specific cancel function in the contract or finalize with 0 amount
+                processingLocks.delete(intentId); // Release lock
                 continue;
             }
 
             let winner = null;
             let highestBid = BigInt(0);
 
-            // Find the highest bid
+            // Aggregate bids by bidder address (same logic as BidComponent.tsx)
+            // A bidder can place multiple sequential bids, and they should be summed
+            const bidderMap = new Map<string, { bidder: string; totalAmount: bigint; token: string; sourceChain: string }>();
+            
             for (const bid of bids) {
+                const bidderKey = bid.bidder.toLowerCase();
                 const bidAmount = BigInt(bid.amount);
-                if (bidAmount > highestBid) {
-                    highestBid = bidAmount;
-                    winner = bid;
+                
+                if (bidderMap.has(bidderKey)) {
+                    // Add to existing bid total
+                    const existing = bidderMap.get(bidderKey)!;
+                    existing.totalAmount += bidAmount;
+                } else {
+                    // Create new entry
+                    bidderMap.set(bidderKey, {
+                        bidder: bid.bidder,
+                        totalAmount: bidAmount,
+                        token: bid.token,
+                        sourceChain: bid.sourceChain
+                    });
+                }
+            }
+
+            // Find the bidder with the highest total bid
+            for (const [_, aggregatedBid] of bidderMap.entries()) {
+                if (aggregatedBid.totalAmount > highestBid) {
+                    highestBid = aggregatedBid.totalAmount;
+                    winner = {
+                        bidder: aggregatedBid.bidder,
+                        amount: aggregatedBid.totalAmount.toString(),
+                        token: aggregatedBid.token,
+                        sourceChain: aggregatedBid.sourceChain
+                    };
                 }
             }
 
             const reservePrice = BigInt(auction.reservePrice);
 
             if (!winner || highestBid < reservePrice) {
-                console.log(`   - No valid bids met the reserve price (${ethers.formatUnits(reservePrice, 6)}). Returning NFT to seller...`);
-                try {
-                    const cancelTx = await auctionHub.connect(keeperWallet).cancelAuction(intentId);
-                    await cancelTx.wait();
-                    console.log(`   - NFT returned to seller. Tx: ${cancelTx.hash}`);
-                    
-                    // Update local auction status
-                    auctionData.status = 3; // Cancelled
-                    allAuctions.set(intentId, auctionData);
-                } catch (error) {
-                    console.error("   - Failed to return NFT:", error);
-                }
+                console.log(`   - No valid bids met the reserve price (${ethers.formatUnits(reservePrice, 6)}). Auction needs to be cancelled by seller.`);
+                // Note: cancelAuction() requires seller to call it, not keeper
+                // The seller will need to call cancelAuction() manually
+                // TODO: Add a keeper-specific cancel function or finalize-and-return function in the contract
+                processingLocks.delete(intentId); // Release lock
                 continue;
             }
 
             const winnerTokenSymbol = getTokenSymbol(winner.token, getChainConfig(winner.sourceChain)?.id || auctionChain.id);
             console.log(`   - Winner: ${winner.bidder} with bid of ${formatStableCoinAmount(winner.amount, winnerTokenSymbol)} ${winnerTokenSymbol}`);
 
-            console.log("   - Finalizing auction and transferring NFT to winner...");
-            try {
-                const finalizeTx = await auctionHub.connect(keeperWallet).finalizeAuction(intentId, winner.bidder,winner.amount);
-                await finalizeTx.wait();
-                console.log(`   - Auction finalized. NFT transferred to winner. Tx: ${finalizeTx.hash}`);
-                
-                // Update local auction status
-                auctionData.status = 1; // Finalized
-                allAuctions.set(intentId, auctionData);
-            } catch (error) {
-                console.error("   - Failed to finalize auction:", error);
-                continue;
+            // Step 1: Finalize auction on-chain (mark winner and change status to Finalized)
+            // Only finalize if status is Active
+            if (auctionStatus === AuctionStatus.Active) {
+                console.log("   - Step 1: Finalizing auction (marking winner)...");
+                try {
+                    const finalizeTx = await auctionHub.connect(keeperWallet).finalizeAuction(intentId, winner.bidder, winner.amount);
+                    await finalizeTx.wait();
+                    console.log(`   - ✓ Auction finalized (status: Active → Finalized). Tx: ${finalizeTx.hash}`);
+                    
+                    // Update local auction status
+                    auctionData.status = AuctionStatus.Finalized;
+                    allAuctions.set(intentId, auctionData);
+                } catch (error: any) {
+                    console.error("   - ✗ Failed to finalize auction:", error?.message || error);
+                    if (error?.message?.includes("Auction not ended")) {
+                        console.error("   - ⚠️  Blockchain time may not have reached deadline yet. Will retry next cycle.");
+                        processingLocks.delete(intentId); // Release lock before retry
+                        continue;
+                    }
+                    // For other errors, log but continue to try settlement
+                }
+            } else if (auctionStatus === AuctionStatus.Finalized) {
+                console.log("   - Step 1: Auction already finalized, proceeding to settlement...");
             }
 
-            // Start cross-chain settlement
-            await settleCrossChainAuction(intentId, auction, winner, bids, auctionData.sourceChain);
-
-            console.log(`   - Cross-chain settlement completed for auction ${intentId.slice(0, 10)}...`);
+            // Step 2: Cross-chain settlement (transfer funds)
+            console.log("   - Step 2: Starting cross-chain settlement...");
+            try {
+                await settleCrossChainAuction(intentId, auction, winner, bids, auctionData.sourceChain);
+                console.log(`   - ✓ Cross-chain settlement completed for auction ${intentId.slice(0, 10)}...`);
+            } catch (error: any) {
+                console.error(`   - ✗ Settlement failed for auction ${intentId.slice(0, 10)}...:`, error?.message || error);
+                // Release lock and don't update status - will retry next cycle
+                processingLocks.delete(intentId);
+                continue;
+            }
             
             // Update local auction status to settled
-            auctionData.status = 2; // Settled
+            auctionData.status = AuctionStatus.Settled;
             allAuctions.set(intentId, auctionData);
+
+            // Release processing lock after successful completion
+            processingLocks.delete(intentId);
+            console.log(`   - 🔓 Processing lock released for auction ${intentId.slice(0, 10)}...`);
 
         } catch (error) {
             console.error(`   - Error processing auction ${intentId.slice(0, 10)}...:`, error);
+            // Always release lock on error
+            processingLocks.delete(intentId);
         }
     }
 }
@@ -408,21 +355,17 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         
         const sourceChainConfig = getChainConfig(sourceChain);
 
-        // FIXED: Handle preferred chain properly - it might be stored as different property names
         let targetChainConfig;
         if (auction.preferdChain !== undefined && auction.preferdChain !== null && auction.preferdChain !== "") {
-            // try numeric id first
             const numericId = Number(auction.preferdChain);
             if (!isNaN(numericId) && numericId !== 0) {
                 targetChainConfig = Object.values(CONFIG.chains).find(c => Number(c.id) === numericId);
             }
-            // fallback: try using getChainConfig (handles name or id)
             if (!targetChainConfig) {
                 targetChainConfig = getChainConfig(auction.preferdChain as any);
             }
         }
         
-        // now call getChainConfig for source as before
         const targetConfig = targetChainConfig ;
         
         const targetChain = targetConfig;
@@ -438,14 +381,11 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         console.log(`   - Source chain: ${sourceChain} (${sourceChainConfig.name})`);
         console.log(`   - Target chain: ${targetChain} (${targetConfig.name})`);
 
-        // Rest of the settlement logic remains the same...
-        // Get BidManager contract on winner's chain to release the winning bid
         const winnerChainConfig = getChainConfig(winner.sourceChain);
         if (!winnerChainConfig) {
             throw new Error(`Winner's chain configuration not found: ${winner.sourceChain}`);
         }
 
-        // Get BidManager contract on winner's chain to release the winning bid
         const sourceProvider = new ethers.JsonRpcProvider(winnerChainConfig.rpcUrl);
         const bidManager = new ethers.Contract(
             winnerChainConfig.bidManagerAddress,
@@ -457,135 +397,42 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         console.log(`   - Releasing winning bid from BidManager on ${winner.sourceChain}...`);
         const releaseTx = await bidManager.releaseWinningBid(intentId, winner.bidder, auction.seller);
         await releaseTx.wait();
-        console.log(`   - Winning bid released. Tx: ${releaseTx.hash}`);
-
-        // Get initialized Nexus SDK
-        const nexusSDK = await getNexusSDK();
-
+        console.log(`   - ✅ Winning bid released to seller on ${winnerChainConfig.name}. Tx: ${releaseTx.hash}`);
+        
         const winnerTokenAddress = winner.token;
         const requiredTokenAddress = auction.preferdToken || auction.preferdToken;
         const bidAmount = winner.amount;
-
-        // Validate that we're working with stable coins as expected
-        validateStableCoinOnlyAuction(winnerTokenAddress, requiredTokenAddress, sourceChainConfig.id, targetConfig.id);
-
-        // Convert token addresses to symbols
-        const winnerTokenSymbol = getTokenSymbol(winnerTokenAddress, sourceChainConfig.id);
+        
+        validateStableCoinOnlyAuction(winnerTokenAddress, requiredTokenAddress, winnerChainConfig.id, targetConfig.id);
+        
+        const winnerTokenSymbol = getTokenSymbol(winnerTokenAddress, winnerChainConfig.id);
         const requiredTokenSymbol = getTokenSymbol(requiredTokenAddress, targetConfig.id);
-
+        
         console.log(`   - Winner token: ${winnerTokenSymbol} (${formatStableCoinAmount(bidAmount, winnerTokenSymbol)})`);
         console.log(`   - Required token: ${requiredTokenSymbol}`);
-
-        // Check if tokens are the same or equivalent stable coins
-        if (winnerTokenSymbol === requiredTokenSymbol) {
-            console.log(`   - Tokens match exactly. Using simple bridge for ${formatStableCoinAmount(bidAmount, winnerTokenSymbol)} ${winnerTokenSymbol}...`);
-            
-            // Simple bridge transfer
-            const bridgeResult: TransferResult = await nexusSDK.transfer({
-                token: winnerTokenSymbol,
-                amount: bidAmount.toString(),
-                chainId: Number(targetConfig.id),
-                recipient: auction.seller,
-                sourceChains: [Number(sourceChainConfig.id)],
-            } as TransferParams);
-
-            console.log(`   - Bridge transaction successful: ${bridgeResult}`);
-        } else if (areEquivalentStableCoins(winnerTokenSymbol, requiredTokenSymbol)) {
-            console.log(`   - Tokens are equivalent stable coins (${winnerTokenSymbol} ≈ ${requiredTokenSymbol}). Using optimized stable coin swap via SwapRouter02...`);
-            
-            // For stable coin swaps, use the lowest fee tier (0.05%) for better rates
-            const swapRouter02Address = getSwapRouter02Address(targetConfig.id);
-            console.log(`   - Using Uniswap SwapRouter02 at ${swapRouter02Address} with 0.05% fee tier for stable coin pair`);
-            
-            // Calculate minimum amount out with 0.5% slippage for stable coins
-            const winnerDecimals = getTokenDecimals(winnerTokenSymbol);
-            const requiredDecimals = getTokenDecimals(requiredTokenSymbol);
-            const amountOutMinimum = calculateStableCoinMinimumOut(bidAmount, winnerDecimals, requiredDecimals);
-            
-            const bridgeAndExecuteResult: BridgeAndExecuteResult = await nexusSDK.bridgeAndExecute({
-                token: winnerTokenSymbol,
-                amount: bidAmount.toString(),
-                toChainId: targetConfig.id,
-                sourceChains: [sourceChainConfig.id],
-                execute: {
-                    contractAddress: swapRouter02Address,
-                    contractAbi: SWAP_ROUTER02_ABI,
-                    functionName: 'exactInputSingle',
-                    buildFunctionParams: (
-                        token: any,
-                        amount: string,
-                        chainId: number,
-                        userAddress: `0x${string}`,
-                    ) => {
-                        const swapParams = {
-                            tokenIn: winnerTokenAddress,
-                            tokenOut: requiredTokenAddress,
-                            fee: 500, // 0.05% fee tier for stable coin pairs
-                            recipient: auction.seller,
-                            amountIn: amount,
-                            amountOutMinimum: amountOutMinimum.toString(),
-                            sqrtPriceLimitX96: 0 // No price limit for stable coins
-                        };
-                        
-                        return {
-                            functionParams: [swapParams],
-                        };
-                    },
-                    tokenApproval: {
-                        token: winnerTokenSymbol,
-                        amount: bidAmount.toString(),
-                    },
-                },
-                waitForReceipt: true,
-            } as BridgeAndExecuteParams);
-
-            console.log(`   - Stable coin bridge and swap transaction successful: ${bridgeAndExecuteResult}`);
+        console.log(`   - Current location: ${winnerChainConfig.name} (${winnerChainConfig.id})`);
+        console.log(`   - Preferred destination: ${targetConfig.name} (${targetConfig.id})`);
+        
+        if (winnerChainConfig.id === targetConfig.id && winnerTokenSymbol === requiredTokenSymbol) {
+            console.log(`   - 🎉 Funds already on seller's preferred chain with correct token!`);
+            console.log(`   - ✅ No additional action needed - settlement complete`);
+        } else if (winnerChainConfig.id !== targetConfig.id && winnerTokenSymbol === requiredTokenSymbol) {
+            console.log(`   - 🌉 Cross-chain bridge needed (same token, different chain)`);
+            console.log(`   - 💰 ${formatStableCoinAmount(bidAmount, winnerTokenSymbol)} ${winnerTokenSymbol}`);
+            console.log(`   - 📍 From: ${winnerChainConfig.name} → To: ${targetConfig.name}`);
+            console.log(`   - 💡 Seller will bridge via frontend "Claim Tokens" button using Avail Nexus SDK`);
+        } else if (winnerTokenSymbol !== requiredTokenSymbol) {
+            console.log(`   - 🔄 Bridge + Swap needed (different token and/or chain)`);
+            console.log(`   - 💰 ${formatStableCoinAmount(bidAmount, winnerTokenSymbol)} ${winnerTokenSymbol} → ${requiredTokenSymbol}`);
+            console.log(`   - 📍 From: ${winnerChainConfig.name} → To: ${targetConfig.name}`);
+            console.log(`   - 💡 Seller will bridge and swap via frontend "Claim Tokens" button using Avail Nexus SDK`);
         } else {
-            // This case should not occur if we're only using stable coins, but keeping for safety
-            console.warn(`   - Warning: Non-stable coin detected (${winnerTokenSymbol} -> ${requiredTokenSymbol}). This may result in high slippage and fees!`);
-            console.log(`   - Using standard bridge + swap with higher fee tier via SwapRouter02...`);
-            
-            const swapRouter02Address = getSwapRouter02Address(targetConfig.id);
-            
-            const bridgeAndExecuteResult: BridgeAndExecuteResult = await nexusSDK.bridgeAndExecute({
-                token: winnerTokenSymbol,
-                amount: bidAmount.toString(),
-                toChainId: Number(targetConfig.id),
-                sourceChains: [Number(sourceChainConfig.id)],
-                execute: {
-                    contractAddress: swapRouter02Address,
-                    contractAbi: SWAP_ROUTER02_ABI,
-                    functionName: 'exactInputSingle',
-                    buildFunctionParams: (
-                        token: any,
-                        amount: string,
-                        chainId: number,
-                        userAddress: `0x${string}`,
-                    ) => {
-                        const swapParams = {
-                            tokenIn: winnerTokenAddress,
-                            tokenOut: requiredTokenAddress,
-                            fee: 3000, // 0.3% fee tier for non-stable pairs
-                            recipient: auction.seller,
-                            amountIn: amount,
-                            amountOutMinimum: 0, // Accept any amount for non-stable pairs (risky but necessary)
-                            sqrtPriceLimitX96: 0
-                        };
-                        
-                        return {
-                            functionParams: [swapParams],
-                        };
-                    },
-                    tokenApproval: {
-                        token: winnerTokenSymbol,
-                        amount: bidAmount.toString(),
-                    },
-                },
-                waitForReceipt: true,
-            } as BridgeAndExecuteParams);
-
-            console.log(`   - Non-stable coin bridge and swap transaction successful: ${bridgeAndExecuteResult}`);
+            console.log(`   - 🌉 Cross-chain delivery scenario detected`);
+            console.log(`   - 💡 Seller will claim via frontend using Avail Nexus SDK`);
         }
+        
+        console.log(`   - 📝 Frontend claim demonstrates proper Nexus SDK usage (user-initiated transfers)`);
+        console.log(`   - ✅ Fund release phase completed`);
 
         // Refund losing bidders
         console.log(`   - Refunding losing bidders...`);
@@ -613,9 +460,10 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
 
         // Finally, release the NFT to the winner
         console.log(`   - Releasing NFT to winner...`);
-        const auctionChainConfig = getChainConfig(auction.sourceChain);
+        // Use sourceChain from function parameter, not from auction object
+        const auctionChainConfig = getChainConfig(sourceChain);
         if (!auctionChainConfig) {
-            throw new Error(`Auction chain configuration not found for sourceChain: ${auction.sourceChain}`);
+            throw new Error(`Auction chain configuration not found for sourceChain: ${sourceChain}`);
         }
         const auctionProvider = new ethers.JsonRpcProvider(auctionChainConfig.rpcUrl);
         const auctionHub = new ethers.Contract(
@@ -633,15 +481,5 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
     } catch (error) {
         console.error(`   - Error in cross-chain settlement for auction ${intentId.slice(0, 10)}...:`, error);
         throw error;
-    }
-}
-
-// Export function to pre-initialize Nexus SDK (optional)
-export async function initializeNexusSDK() {
-    try {
-        await getNexusSDK();
-        console.log('[✓] Nexus SDK pre-initialized for keeper');
-    } catch (error) {
-        console.error('[✗] Failed to pre-initialize Nexus SDK:', error);
     }
 }

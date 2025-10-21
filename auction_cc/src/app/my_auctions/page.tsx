@@ -8,6 +8,9 @@ import Link from "next/link";
 import { ethers } from "ethers";
 import { getAuctionHubContract } from "@/lib/auctionHub";
 import LiveBidLeaderboard from "@/components/LiveBid";
+import { detectPendingClaim, markClaimAsCompleted } from "@/lib/claimDetection";
+import type { PendingClaim } from "@/types/claim";
+import { result as bridgeTokens } from '@/components/bridge/bridge';
 
 interface Auction {
   intentId: string;
@@ -58,10 +61,11 @@ const CHAIN_NAMES: { [key: string]: string } = {
 };
 
 const STATUS_NAMES = {
-  0: "Active",
-  1: "Finalized",
-  2: "Settled",
-  3: "Cancelled",
+  0: "Created",
+  1: "Active",
+  2: "Finalized",
+  3: "Settled",
+  4: "Cancelled",
 };
 
 export default function MyAuctionsPage() {
@@ -69,6 +73,7 @@ export default function MyAuctionsPage() {
   const [initialized, setInitialized] = useState(isInitialized());
   const [myAuctions, setMyAuctions] = useState<Auction[]>([]);
   const [auctionBids, setAuctionBids] = useState<{ [key: string]: Bid[] }>({});
+  const [claimingAuction, setClaimingAuction] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
@@ -139,9 +144,6 @@ export default function MyAuctionsPage() {
         });
 
         setAuctionBids(bidsMap);
-        console.log(
-          `Fetched ${userAuctions.length} auctions for user ${address}`
-        );
       } else {
         throw new Error("Invalid response from keeper API");
       }
@@ -229,6 +231,78 @@ export default function MyAuctionsPage() {
       alert(`Failed to cancel auction: ${errorMessage}`);
     } finally {
       setCancelling(null);
+    }
+  };
+
+  // Simple claim handler
+  const handleClaim = async (auction: Auction) => {
+    if (!isConnected || !address) {
+      alert("Please connect your wallet");
+      return;
+    }
+
+    if (!initialized) {
+      alert("Please initialize Nexus first to enable cross-chain bridging");
+      return;
+    }
+
+    const bids = auctionBids[auction.intentId] || [];
+    const claim = detectPendingClaim(auction, bids, address);
+    
+    if (!claim) {
+      return;
+    }
+
+    setClaimingAuction(auction.intentId);
+    
+    try {
+      const decimals = 6; // USDC/USDT decimals
+      const humanReadableAmount = Number(claim.amount) / (10 ** decimals);
+
+      console.log('[Claim] Bridging tokens:', {
+        token: claim.currentTokenSymbol,
+        amount: humanReadableAmount,
+        from: claim.currentChainName,
+        to: claim.preferredChainName,
+      });
+
+      const result = await bridgeTokens(
+        claim.currentTokenSymbol,
+        humanReadableAmount,
+        claim.preferredChainId,
+        [claim.currentChainId]
+      );
+
+      console.log('[Claim] Bridge result:', result);
+
+      // Only mark as completed AFTER successful transaction
+      if (result) {
+        markClaimAsCompleted(auction.intentId);
+        
+        alert(`Successfully claimed and bridged ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredChainName}`);
+        
+        // Refresh auctions after a delay
+        setTimeout(() => {
+          fetchMyAuctions();
+        }, 2000);
+      } else {
+        throw new Error('Bridge transaction failed');
+      }
+    } catch (error: any) {
+      console.error('Claim error:', error);
+      
+      let errorMessage = 'Unknown error';
+      if (error?.message) {
+        if (error.message.includes('user rejected') || error.message.includes('User denied')) {
+          errorMessage = 'Transaction was rejected';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      alert(`Failed to claim: ${errorMessage}`);
+    } finally {
+      setClaimingAuction(null);
     }
   };
 
@@ -534,42 +608,81 @@ export default function MyAuctionsPage() {
                           </div>
                         </div>
 
-                        <div className="flex gap-2 pt-3">
-                          <button
-                            onClick={() => setSelectedAuction(auction)}
-                            className="flex-1 py-2 bg-white/10 border border-white/20 text-white rounded-lg font-medium hover:bg-white/20 transition-colors"
-                          >
-                            View Details
-                          </button>
-
-                          {canCancel(auction) && (
+                        <div className="flex flex-col gap-2 pt-3">
+                          {/* Claim Button for Settled Auctions */}
+                          {auction.status === 3 && address && (() => {
+                            const bids = auctionBids[auction.intentId] || [];
+                            const claim = detectPendingClaim(auction, bids, address);
+                            return claim && (
+                              <div className="space-y-2">
+                                <button
+                                  onClick={() => handleClaim(auction)}
+                                  disabled={claimingAuction === auction.intentId || !initialized}
+                                  className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                                >
+                                  {claimingAuction === auction.intentId ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                      <span className="animate-spin inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></span>
+                                      Claiming...
+                                    </span>
+                                  ) : (
+                                    `Claim ${claim.currentTokenSymbol} to ${claim.preferredChainName}`
+                                  )}
+                                </button>
+                                {!initialized && (
+                                  <p className="text-xs text-yellow-400 text-center">
+                                    Initialize Nexus to enable cross-chain claims
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })()}
+                          
+                          <div className="flex gap-2">
                             <button
-                              onClick={() => cancelAuction(auction)}
-                              disabled={cancelling === auction.intentId}
-                              className="px-4 py-2 bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg font-medium hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                              onClick={() => setSelectedAuction(auction)}
+                              className="flex-1 py-2 bg-white/10 border border-white/20 text-white rounded-lg font-medium hover:bg-white/20 transition-colors"
                             >
-                              {cancelling === auction.intentId
-                                ? "..."
-                                : "Cancel"}
+                              View Details
                             </button>
-                          )}
+
+                            {canCancel(auction) && (
+                              <button
+                                onClick={() => cancelAuction(auction)}
+                                disabled={cancelling === auction.intentId}
+                                className="px-4 py-2 bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg font-medium hover:bg-red-500/30 transition-colors disabled:opacity-50"
+                              >
+                                {cancelling === auction.intentId
+                                  ? "..."
+                                  : "Cancel"}
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
                   );
                 })
               ) : (
-                <div className="col-span-full bg-white/5 p-12 rounded-xl border border-white/10 backdrop-blur-sm text-center">
-                  <div className="text-6xl mb-4">📝</div>
-                  <h3 className="text-white text-xl font-semibold mb-2">
+                <div className="col-span-full bg-white/5 p-16 rounded-xl border border-white/10 backdrop-blur-sm text-center">
+                  {/* Icon */}
+                  <div className="mb-6 flex justify-center">
+                    <div className="w-24 h-24 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+                      <svg className="w-12 h-12 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </div>
+                  </div>
+                  
+                  <h3 className="text-white text-2xl font-semibold mb-3">
                     No Auctions Created
                   </h3>
-                  <p className="text-white/50 mb-6">
-                    You haven't created any auctions yet.
+                  <p className="text-white/60 mb-8 max-w-md mx-auto">
+                    You haven't created any auctions yet. Start trading your NFTs across multiple blockchains.
                   </p>
                   <Link
                     href="/create"
-                    className="inline-flex px-6 py-3 bg-white text-black font-semibold rounded-lg hover:bg-zinc-200 transition-colors"
+                    className="inline-flex px-8 py-3 bg-white text-black font-semibold rounded-lg hover:bg-white/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                   >
                     Create Your First Auction
                   </Link>

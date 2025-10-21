@@ -1,8 +1,12 @@
 import type { BridgeParams, BridgeResult } from '@avail-project/nexus-core';
-import {sdk} from '../../lib/nexus/nexusClient';
+import { sdk } from '../../lib/nexus/nexusClient';
 
-
-export const result = async (token: string, amount: number, chainId: number, sourceChains?: number[]): Promise<BridgeResult> => {
+export const result = async (
+    token: string, 
+    amount: number, 
+    chainId: number, 
+    sourceChains?: number[]
+): Promise<BridgeResult> => {
     return await sdk.bridge({
         token: token,
         amount: amount,
@@ -10,4 +14,3 @@ export const result = async (token: string, amount: number, chainId: number, sou
         sourceChains: sourceChains,
     } as BridgeParams);
 }
-

@@ -6,6 +6,14 @@ import { resultForToken } from './unified_balance/fetch-unified-balance';
 import { TOKEN_ADDRESSES, SUPPORTED_TOKENS, CHAIN_NAMES, BID_MANAGER_ADDRESS, type SupportedToken } from '@/lib/constants';
 import BidManagerABI from '@/abis/BidManager.json';
 
+// Map chain names from backend to chain IDs
+const CHAIN_NAME_TO_ID: { [key: string]: number } = {
+  'ethereum': 11155111,
+  'arbitrumSepolia': 421614,
+  'base': 84532,
+  'optimism': 11155420
+};
+
 interface BidFormProps {
   auctionId: string;
   startingPrice: string;
@@ -25,6 +33,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
   const [bidsLoading, setBidsLoading] = useState(true);
   const [existingBid, setExistingBid] = useState<number>(0); // Track user's existing bid amount
   const [existingBidToken, setExistingBidToken] = useState<string | null>(null); // Track token used in existing bid
+  const [existingBidChain, setExistingBidChain] = useState<number | null>(null); // Track chain from user's first bid
   const { isConnected, address } = useAccount();
   const { data: walletClient } = useWalletClient();
 
@@ -73,9 +82,6 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
       if (!isConnected || !address) return;
 
       try {
-        console.log('=== FETCHING EXISTING BID FROM BACKEND ===');
-        console.log('Auction ID:', auctionId);
-        console.log('User Address:', address);
         
         // Fetch all bids for this auction from the backend
         const response = await fetch(`http://localhost:3001/api/bids/${auctionId}`);
@@ -90,7 +96,6 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
         const data = await response.json();
         
         if (!data.success || !data.data || data.data.length === 0) {
-          console.log('✓ No bids found for this auction');
           setExistingBid(0);
           setExistingBidToken(null);
           return;
@@ -102,12 +107,22 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
         );
 
         if (userBids.length === 0) {
-          console.log('✓ No existing bids from this user');
           setExistingBid(0);
           setExistingBidToken(null);
+          setExistingBidChain(null);
           return;
         }
 
+        // Find the FIRST bid (earliest timestamp) to determine the locked chain
+        const firstBid = userBids.reduce((earliest: any, current: any) => {
+          const earliestTime = new Date(earliest.timestamp).getTime();
+          const currentTime = new Date(current.timestamp).getTime();
+          return currentTime < earliestTime ? current : earliest;
+        }, userBids[0]);
+
+        // Get the chain ID from the first bid's source chain
+        const firstBidChainId = CHAIN_NAME_TO_ID[firstBid.sourceChain];
+        
         // Calculate total bid amount across all chains for this user
         const totalBidAmount = userBids.reduce((total: number, bid: any) => {
           // Bid amounts are stored with 6 decimals (USDC/USDT)
@@ -118,24 +133,27 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
         // Get the token from the first bid (assuming user uses same token)
         const firstBidToken = userBids[0].token;
 
-        console.log('✓ User has existing bids:');
-        console.log('  - Total bids:', userBids.length);
-        console.log('  - Chains:', userBids.map((b: any) => b.sourceChain).join(', '));
-        console.log('  - Total amount: $' + totalBidAmount.toFixed(2));
-        console.log('  - Token:', firstBidToken);
-
         setExistingBid(totalBidAmount);
         setExistingBidToken(firstBidToken);
+        setExistingBidChain(firstBidChainId);
 
       } catch (error) {
         console.error('Failed to fetch existing bid from backend:', error);
         setExistingBid(0);
         setExistingBidToken(null);
+        setExistingBidChain(null);
       }
     };
 
     fetchExistingBid();
   }, [auctionId, isConnected, address]);
+
+  // Set selected chain to user's first bid chain if they have an existing bid
+  useEffect(() => {
+    if (existingBidChain !== null) {
+      setSelectedChain(existingBidChain);
+    }
+  }, [existingBidChain]);
 
   useEffect(() => {
     const fetchBalance = async () => {
@@ -144,10 +162,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
       setBalanceLoading(true);
       try {
         const balanceData = await resultForToken(selectedToken);
-        // balanceData contains unified balance across all chains
-        // Since USDC/USDT are stablecoins, the amount represents dollars
         if (balanceData && 'balanceInFiat' in balanceData) {
-            console.log('Setting unified balance to:', balanceData?.balanceInFiat);
           setUnifiedBalance(balanceData?.balanceInFiat || 0);
         } else {
           setUnifiedBalance(0);
@@ -183,14 +198,18 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
     // Check if user is increasing an existing bid (aggregated across all chains)
     if (existingBid > 0) {
+      // Validate that user is bidding from the same chain as their first bid
+      if (existingBidChain !== null && selectedChain !== existingBidChain) {
+        alert(`You can only bid from ${CHAIN_NAMES[existingBidChain as keyof typeof CHAIN_NAMES]}, the chain where you placed your first bid.`);
+        return;
+      }
+      
       if (newTotalBidAmount <= existingBid) {
         alert(`Your new bid must be higher than your total existing bid of $${existingBid.toFixed(2)} (across all chains)`);
         return;
       }
       
-      // Note: User can bid from different chains, so we allow different tokens
-      // The backend aggregates all bids by this user for this auction
-      console.log('✓ Increasing existing bid from $' + existingBid.toFixed(2) + ' to $' + newTotalBidAmount.toFixed(2));
+
     }
 
     // Parse starting and reserve prices (stored as 6 decimals for USDC/USDT)
@@ -234,47 +253,22 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
     try {
       setLoading(true);
 
-      console.log('=== BID SUBMISSION STARTED ===');
-      console.log('Auction ID:', auctionId);
-      console.log('Connected Address:', address);
-      console.log('Selected Chain:', selectedChain, CHAIN_NAMES[selectedChain as keyof typeof CHAIN_NAMES]);
-      console.log('Total Bid Amount:', newTotalBidAmount, selectedToken);
-      console.log('Existing Bid:', existingBid);
-      console.log('Incremental Amount to Transfer:', incrementalAmount, selectedToken);
-      console.log('BidManager Address:', BID_MANAGER_ADDRESS);
-
       // Get the token address early for verification
       const tokenAddress = TOKEN_ADDRESSES[selectedChain as keyof typeof TOKEN_ADDRESSES][selectedToken];
       if (!tokenAddress) {
         throw new Error(`Token address not found for ${selectedToken} on chain ${selectedChain}`);
       }
-      console.log('Token Address:', tokenAddress);
-
-      console.log('\n=== STEP 1: NEXUS TRANSFER ===');
       const transferResult = await nexusTransfer(
-        selectedToken,        // token symbol (USDC or USDT)
-        incrementalAmount,   // only transfer the additional amount needed
-        selectedChain,       // target chainId where BidManager will receive funds
-        BID_MANAGER_ADDRESS, // recipient address (BidManager contract)
-        undefined            // sourceChains - let SDK auto-select from available balances
+        selectedToken,        
+        incrementalAmount,   
+        selectedChain,       
+        BID_MANAGER_ADDRESS, 
+        undefined            
       );
-
-      console.log('Nexus transfer result:', transferResult);
 
       if (!transferResult || !transferResult.success) {
         throw new Error('Nexus transfer failed or was not completed');
       }
-
-      console.log('\n=== STEP 2: WAITING FOR CONFIRMATION ===');
-      // After successful transfer, the tokens are now on the target chain at BidManager
-      console.log(`Tokens transferred to BidManager (${incrementalAmount} ${selectedToken})`);
-      
-      // Wait for the transfer to be confirmed and indexed
-      console.log('Waiting 10 seconds for blockchain confirmation...');
-      await new Promise(resolve => setTimeout(resolve, 10000));
-
-      console.log('\n=== STEP 3: VERIFYING BALANCE ===');
-      // Create a provider for verification and later transaction
       const provider = new ethers.BrowserProvider(walletClient as any);
       
       // Check BidManager contract balance
@@ -285,22 +279,16 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
       );
 
       const bidManagerBalance = await tokenContract.balanceOf(BID_MANAGER_ADDRESS);
-      console.log(`✓ BidManager balance: ${ethers.formatUnits(bidManagerBalance, 6)} ${selectedToken}`);
 
       // Format the amount to exactly 6 decimal places to avoid precision issues
       const formattedAmount = incrementalAmount.toFixed(6);
       const expectedAmount = ethers.parseUnits(formattedAmount, 6);
-      console.log(`✓ Expected transfer amount: ${formattedAmount} ${selectedToken}`);
 
       if (bidManagerBalance < expectedAmount) {
         console.warn('⚠️ Warning: BidManager balance is less than expected amount!');
         console.warn('This might cause the placeBid transaction to fail.');
         console.warn('Continuing anyway - the smart contract will verify...');
       }
-
-      console.log('\n=== STEP 4: CALLING PLACEBID ===');
-      // Now we call placeBid on the BidManager contract
-      console.log('Preparing placeBid transaction...');
 
       // Convert the INCREMENTAL amount to wei (assuming 6 decimals for USDC/USDT)
       // Use the same formatted amount to ensure consistency
@@ -317,22 +305,13 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
       // Convert auctionId to bytes32 format
       const intentIdBytes32 = ethers.zeroPadValue(ethers.toBeHex(auctionId), 32);
 
-      // Call placeBid function
-      console.log('Placing bid with params:', {
-        intentId: intentIdBytes32,
-        token: tokenAddress,
-        amount: amountInWei.toString()
-      });
-
       const tx = await bidManagerContract.placeBid(
         intentIdBytes32,
         tokenAddress,
         amountInWei
       );
 
-      console.log('Transaction sent:', tx.hash);
       await tx.wait();
-      console.log('Bid successfully placed on-chain!');
 
       // Call the parent callback
       await onBidSubmit(amount);
@@ -371,6 +350,21 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
                     First bidders must bid between reserve and starting price
                   </p>
                 </>
+              ) : highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6)) ? (
+                <>
+                  <div className="flex justify-between items-center mb-1">
+                    <span>Current Highest Bid:</span>
+                    <span className="text-lg font-bold text-green-400">${highestBid.toFixed(2)}</span>
+                  </div>
+                  <div className="bg-green-500/20 rounded-lg p-3 mt-2 border border-green-500/40">
+                    <p className="text-sm font-bold text-green-300 text-center">
+                      Maximum Bid Reached!
+                    </p>
+                    <p className="text-xs text-zinc-400 text-center mt-1">
+                      The highest possible bid has been placed
+                    </p>
+                  </div>
+                </>
               ) : (
                 <>
                   <div className="flex justify-between items-center mb-1">
@@ -393,14 +387,19 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
           {existingBid > 0 && (
             <div className="bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/30">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-400">Your Total Bid (All Chains):</span>
+                <span className="text-sm text-zinc-400">Your Total Bid:</span>
                 <span className="text-lg font-bold text-yellow-400">${existingBid.toFixed(2)}</span>
               </div>
-              <p className="text-xs text-zinc-500 mt-1">
-                💡 You can increase your bid. Only the additional amount will be transferred.
-              </p>
-              <p className="text-xs text-zinc-400 mt-1">
-                🔗 Your bids are aggregated across all chains where you've placed them
+              {existingBidChain && (
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-sm text-zinc-400">Locked to Chain:</span>
+                  <span className="text-sm font-semibold text-yellow-400">
+                    {CHAIN_NAMES[existingBidChain as keyof typeof CHAIN_NAMES]}
+                  </span>
+                </div>
+              )}
+              <p className="text-xs text-zinc-500 mt-2">
+                You can increase your bid. Only the additional amount will be transferred.
               </p>
             </div>
           )}
@@ -424,12 +423,17 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
           {/* Target Chain Selection */}
           <div>
-            <label className="block text-sm text-zinc-400 mb-2">Target Chain (Where to send funds)</label>
+            <label className="block text-sm text-zinc-400 mb-2">
+              Target Chain (Where to send funds)
+            </label>
             <select
               value={selectedChain}
               onChange={(e) => setSelectedChain(Number(e.target.value))}
-              className="w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 text-white focus:border-blue-500 focus:outline-none"
+              className={`w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 text-white focus:border-blue-500 focus:outline-none ${
+                existingBidChain ? 'opacity-60 cursor-not-allowed' : ''
+              }`}
               required
+              disabled={existingBidChain !== null}
             >
               {supportedChains.map((chainId) => (
                 <option key={chainId} value={chainId}>
@@ -438,7 +442,10 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
               ))}
             </select>
             <p className="mt-1 text-xs text-zinc-500">
-              Funds will be automatically aggregated from all chains and sent to this chain
+              {existingBidChain 
+                ? '⚠️ You can only bid from the same chain as your first bid'
+                : 'Funds will be automatically aggregated from all chains and sent to this chain'
+              }
             </p>
           </div>
 
@@ -451,10 +458,13 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
                   key={token}
                   type="button"
                   onClick={() => setSelectedToken(token)}
+                  disabled={highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6))}
                   className={`px-4 py-3 rounded-lg font-semibold transition-all ${
-                    selectedToken === token
-                      ? 'bg-blue-500 text-white border-2 border-blue-400'
-                      : 'bg-black text-zinc-400 border border-zinc-800 hover:border-zinc-600'
+                    highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6))
+                      ? 'opacity-60 cursor-not-allowed bg-black text-zinc-600 border border-zinc-800'
+                      : selectedToken === token
+                        ? 'bg-blue-500 text-white border-2 border-blue-400'
+                        : 'bg-black text-zinc-400 border border-zinc-800 hover:border-zinc-600'
                   }`}
                 >
                   {token}
@@ -477,13 +487,19 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
                 max={unifiedBalance}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full pl-8 pr-4 py-3 rounded-lg bg-black border border-zinc-800 text-white focus:border-blue-500 focus:outline-none"
+                className={`w-full pl-8 pr-4 py-3 rounded-lg bg-black border border-zinc-800 text-white focus:border-blue-500 focus:outline-none ${
+                  highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6)) ? 'opacity-60 cursor-not-allowed' : ''
+                }`}
                 placeholder="0.00"
                 required
+                disabled={highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6))}
               />
             </div>
             <p className="mt-1 text-xs text-zinc-500">
-              1 {selectedToken} = $1.00 USD • Max: ${unifiedBalance.toFixed(2)}
+              {highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6)) 
+                ? '🏆 The maximum bid has been reached - no more bids can be placed' 
+                : `1 ${selectedToken} = $1.00 USD • Max: $${unifiedBalance.toFixed(2)}`
+              }
             </p>
           </div>
 
@@ -537,14 +553,14 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
           <button
             type="submit"
-            disabled={loading || !isConnected}
+            disabled={loading || !isConnected || (highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6)))}
             className={`w-full py-3 rounded-lg font-bold ${
-              loading || !isConnected
+              loading || !isConnected || (highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6)))
                 ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
                 : 'bg-white text-black hover:bg-zinc-200'
             }`}
           >
-            {loading ? 'Processing...' : 'Place Bid'}
+            {loading ? 'Processing...' : highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6)) ? 'Maximum Bid Reached' : 'Place Bid'}
           </button>
         </form>
       </div>

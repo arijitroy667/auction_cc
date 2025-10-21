@@ -83,7 +83,6 @@ export default function AuctionsPage() {
         });
         
         setAuctions(activeAuctions);
-        console.log(`Fetched ${activeAuctions.length} active auctions from keeper`);
       } else {
         throw new Error('Invalid response from keeper API');
       }
@@ -106,10 +105,6 @@ const handleBidSubmit = async (amount: string) => {
   }
 
   try {
-    // Note: The actual bid placement happens in BidComponent.tsx
-    // The blockchain event listener will automatically pick up the bid
-    // So we just need to refresh the auctions list after the transaction
-    
     await refreshAuctions();
     setSelectedAuction(null);
   } catch (err) {
@@ -195,8 +190,10 @@ const handleBidSubmit = async (amount: string) => {
                 <option value="base">Base Sepolia</option>
               </select>
               <div className="flex-1"></div>
-              <div className="text-white/70 text-sm flex items-center">
-                <span className="mr-2">📊</span>
+              <div className="text-white/70 text-sm flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
                 {filteredAuctions.length} active auction{filteredAuctions.length !== 1 ? 's' : ''}
               </div>
             </div>
@@ -204,8 +201,11 @@ const handleBidSubmit = async (amount: string) => {
             {/* Error Message */}
             {error && (
               <div className="mb-8 p-4 bg-red-500/10 border border-red-500/20 rounded-lg backdrop-blur-sm">
-                <p className="text-red-300 text-center">
-                  ⚠️ {error}
+                <p className="text-red-300 text-center flex items-center justify-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  {error}
                 </p>
               </div>
             )}
@@ -255,8 +255,10 @@ const handleBidSubmit = async (amount: string) => {
                       
                       <div className="pt-3 border-t border-white/10">
                         <div className="flex justify-between items-center">
-                          <span className="text-white/50 text-sm flex items-center">
-                            <span className="mr-1">⏰</span>
+                          <span className="text-white/50 text-sm flex items-center gap-1.5">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
                             {formatTimeLeft(auction.deadline)}
                           </span>
                           <span className="text-xs px-2 py-1 bg-blue-500/20 text-blue-300 rounded">
@@ -267,7 +269,7 @@ const handleBidSubmit = async (amount: string) => {
                       
                       <button
   onClick={() => setSelectedAuction(auction)}
-  className="mt-4 w-full py-2 bg-white text-black rounded-lg font-semibold hover:bg-zinc-200 transition-colors"
+  className="mt-4 w-full py-2 bg-white text-black rounded-lg font-semibold hover:bg-white/90 transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5"
 >
   Place Bid
 </button>
@@ -277,9 +279,11 @@ const handleBidSubmit = async (amount: string) => {
                           href={`https://sepolia.etherscan.io/tx/${auction.txHash}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-blue-400 hover:text-blue-300 flex items-center"
+                          className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1.5"
                         >
-                          <span className="mr-1">🔗</span>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
                           View Transaction
                         </a>
                         
@@ -289,13 +293,22 @@ const handleBidSubmit = async (amount: string) => {
                   </div>
                 ))
               ) : (
-                <div className="col-span-full bg-white/5 p-12 rounded-xl border border-white/10 backdrop-blur-sm text-center">
-                  <div className="text-6xl mb-4">🎨</div>
-                  <h3 className="text-white text-xl font-semibold mb-2">No Active Auctions</h3>
-                  <p className="text-white/50 mb-6">Be the first to create an auction!</p>
+                <div className="col-span-full bg-white/5 p-16 rounded-xl border border-white/10 backdrop-blur-sm text-center">
+                  {/* Icon */}
+                  <div className="mb-6 flex justify-center">
+                    <div className="w-24 h-24 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
+                      <svg className="w-12 h-12 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                      </svg>
+                    </div>
+                  </div>
+                  
+                  <h3 className="text-white text-2xl font-semibold mb-3">No Active Auctions</h3>
+                    <p className="text-white/70 mb-6">There are currently no active auctions available.</p>
+                  
                   <Link
                     href="/create"
-                    className="inline-flex px-6 py-3 bg-white text-black font-semibold rounded-lg hover:bg-zinc-200 transition-colors"
+                    className="inline-flex px-8 py-3 bg-white text-black font-semibold rounded-lg hover:bg-white/90 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                   >
                     Create First Auction
                   </Link>
