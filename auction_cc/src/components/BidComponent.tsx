@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAccount, useWalletClient } from 'wagmi';
+import { useNotification } from '@blockscout/app-sdk';
 import { ethers } from 'ethers';
 import { result as nexusTransfer } from './transfer/transfer';
 import { resultForToken } from './unified_balance/fetch-unified-balance';
@@ -36,6 +37,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
   const [existingBidChain, setExistingBidChain] = useState<number | null>(null); // Track chain from user's first bid
   const { isConnected, address } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const { openTxToast } = useNotification();
 
   const supportedChains = Object.keys(CHAIN_NAMES).map(Number);
 
@@ -311,6 +313,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
         amountInWei
       );
 
+      await openTxToast(selectedChain.toString(), tx.hash);
       await tx.wait();
 
       // Call the parent callback

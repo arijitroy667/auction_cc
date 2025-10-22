@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
 import { isInitialized } from "@/lib/nexus/nexusClient";
+import { useNotification } from '@blockscout/app-sdk';
 import Navbar from "@/components/navbar";
 import Link from "next/link";
 import { ethers } from "ethers";
@@ -78,6 +79,7 @@ export default function MyAuctionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const { openTxToast } = useNotification();
 
   // Check for Nexus initialization status changes
   useEffect(() => {
@@ -182,12 +184,16 @@ export default function MyAuctionsPage() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const auctionHubContract = getAuctionHubContract(signer);
+      const network = await provider.getNetwork();
+      const chainId = network.chainId.toString();
 
       console.log("🔄 Sending cancel transaction...");
       console.log("Intent ID:", auction.intentId);
 
       // Call the cancelAuction method on the contract instance
       const receipt = await auctionHubContract.cancelAuction(auction.intentId);
+
+      await openTxToast(chainId, receipt.hash);
 
       console.log("✅ Auction cancelled:", receipt.hash);
 

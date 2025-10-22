@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import { isInitialized } from "@/lib/nexus/nexusClient";
+import { useNotification } from '@blockscout/app-sdk';
 import Navbar from "@/components/navbar";
 import Link from "next/link";
 import { ethers } from "ethers";
@@ -23,6 +24,7 @@ export default function CreateAuctionPage() {
   const [initialized, setInitialized] = useState(isInitialized());
   const [isCreating, setIsCreating] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
+  const { openTxToast } = useNotification();
 
   // Auction form state - Default to 2 minutes
   const [auctionForm, setAuctionForm] = useState({
@@ -59,6 +61,8 @@ export default function CreateAuctionPage() {
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
+      const network = await provider.getNetwork();
+      const currentChainId = network.chainId.toString();
 
       // ERC721 ABI for approve and setApprovalForAll
       const erc721ABI = [
@@ -88,6 +92,7 @@ export default function CreateAuctionPage() {
 
       // Approve the auction contract to transfer all NFTs
       const tx = await nftContract.setApprovalForAll(AUCTION_HUB_ADDRESS, true);
+      await openTxToast(currentChainId, tx.hash);
       await tx.wait();
 
       alert("NFT contract approved successfully! You can now create auctions.");
