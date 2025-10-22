@@ -192,7 +192,6 @@ export default function MyAuctionsPage() {
 
       // Call the cancelAuction method on the contract instance
       const receipt = await auctionHubContract.cancelAuction(auction.intentId);
-
       await openTxToast(chainId, receipt.hash);
 
       console.log("✅ Auction cancelled:", receipt.hash);
