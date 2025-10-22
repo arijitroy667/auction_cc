@@ -61,8 +61,7 @@ export default function CreateAuctionPage() {
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const network = await provider.getNetwork();
-      const currentChainId = network.chainId.toString();
+      const currentChainId = Number((await provider.getNetwork()).chainId).toString();
 
       // ERC721 ABI for approve and setApprovalForAll
       const erc721ABI = [

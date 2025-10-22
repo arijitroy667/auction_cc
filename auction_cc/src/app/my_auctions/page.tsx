@@ -184,15 +184,14 @@ export default function MyAuctionsPage() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const auctionHubContract = getAuctionHubContract(signer);
-      const network = await provider.getNetwork();
-      const chainId = network.chainId.toString();
+       const currentChainId = Number((await provider.getNetwork()).chainId).toString();
 
       console.log("🔄 Sending cancel transaction...");
       console.log("Intent ID:", auction.intentId);
 
       // Call the cancelAuction method on the contract instance
       const receipt = await auctionHubContract.cancelAuction(auction.intentId);
-      await openTxToast(chainId, receipt.hash);
+      await openTxToast(currentChainId, receipt.hash);
 
       console.log("✅ Auction cancelled:", receipt.hash);
 
