@@ -187,21 +187,6 @@ export function detectPendingClaim(
     const preferredToken = auction.preferdToken;
     const preferredTokenSymbol = getTokenSymbol(preferredToken, preferredChainId);
     
-    // Debug logging
-    console.log('[ClaimDetection] Processing claim:', {
-        intentId: auction.intentId,
-        winnerSourceChain: winnerBid.sourceChain,
-        currentChainId,
-        currentChainName,
-        currentToken,
-        currentTokenSymbol,
-        auctionPreferdChain: auction.preferdChain,
-        preferredChainId,
-        preferredChainName,
-        preferredToken,
-        preferredTokenSymbol,
-    });
-    
     // Calculate flags
     const needsBridge = currentChainId !== preferredChainId;
     const needsSwap = currentTokenSymbol !== preferredTokenSymbol;
