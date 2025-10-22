@@ -313,6 +313,8 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
         amountInWei
       );
 
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
       await openTxToast(selectedChain.toString(), tx.hash);
       await tx.wait();
 
