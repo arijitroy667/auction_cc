@@ -10,6 +10,8 @@ import { ethers } from "ethers";
 import { getAuctionHubContract } from "@/lib/auctionHub";
 import { useRouter } from "next/navigation";
 import NFTSelector from "@/components/NFTSelector";
+import { toast, Toaster } from 'react-hot-toast';
+
 import {
   SUPPORTED_TOKENS,
   CHAIN_NAMES,
@@ -64,7 +66,7 @@ export default function CreateAuctionPage() {
 
   const handleApproveNFT = async () => {
     if (!isConnected || !auctionForm.nftContract || !walletClient) {
-      alert("Please connect your wallet and enter NFT contract address first");
+      toast.error("Please connect your wallet and enter NFT contract address first");
       return;
     }
 
@@ -96,7 +98,7 @@ export default function CreateAuctionPage() {
       );
 
       if (isApproved) {
-        alert("NFT contract is already approved for the AuctionHub");
+        toast.success("NFT contract is already approved for the AuctionHub");
         return;
       }
 
@@ -105,12 +107,12 @@ export default function CreateAuctionPage() {
       await openTxToast(currentChainId, tx.hash);
       await tx.wait();
 
-      alert("NFT contract approved successfully! You can now create auctions.");
+      toast.success("NFT contract approved successfully! You can now create auctions.");
     } catch (error: unknown) {
       console.error("Error approving NFT:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
-      alert(`Failed to approve NFT: ${errorMessage}`);
+      toast.error(`Failed to approve NFT: ${errorMessage}`);
     } finally {
       setIsApproving(false);
     }
@@ -118,7 +120,7 @@ export default function CreateAuctionPage() {
 
   const handleCreateAuction = async () => {
     if (!isConnected || !initialized) {
-      alert("Please connect your wallet and initialize Nexus first");
+      toast.error("Please connect your wallet and initialize Nexus first");
       return;
     }
 
@@ -130,14 +132,14 @@ export default function CreateAuctionPage() {
       !auctionForm.durationHours ||
       !auctionForm.preferdToken
     ) {
-      alert("Please fill in all required fields");
+      toast.error("Please fill in all required fields");
       return;
     }
 
     // Validate duration (minimum 2 minutes)
     const durationMinutes = parseFloat(auctionForm.durationHours) * 60;
     if (durationMinutes < 2) {
-      alert("Auction duration must be at least 2 minutes");
+      toast.error("Auction duration must be at least 2 minutes");
       return;
     }
 
@@ -146,19 +148,19 @@ export default function CreateAuctionPage() {
     const reservePriceNum = parseFloat(auctionForm.reservePrice);
 
     if (isNaN(startingPriceNum) || isNaN(reservePriceNum)) {
-      alert(
+      toast.error(
         "Please enter valid numeric values for starting and reserve prices"
       );
       return;
     }
 
     if (startingPriceNum <= reservePriceNum) {
-      alert("Starting price must be greater than reserve price");
+      toast.error("Starting price must be greater than reserve price");
       return;
     }
 
     if (!walletClient) {
-      alert("Wallet client not available");
+      toast.error("Wallet client not available");
       return;
     }
 
@@ -186,11 +188,11 @@ export default function CreateAuctionPage() {
       try {
         const owner = await nftContract.ownerOf(auctionForm.tokenId);
         if (owner.toLowerCase() !== userAddress.toLowerCase()) {
-          alert(`You don't own this NFT. Current owner: ${owner}`);
+          toast.error(`You don't own this NFT. Current owner: ${owner}`);
           return;
         }
       } catch (error) {
-        alert("Invalid NFT contract address or token ID");
+        toast.error("Invalid NFT contract address or token ID");
         return;
       }
 
@@ -200,7 +202,7 @@ export default function CreateAuctionPage() {
         AUCTION_HUB_ADDRESS
       );
       if (!isApproved) {
-        alert(
+        toast.error(
           'Please approve the NFT contract first by clicking "Approve NFT Contract" button'
         );
         return;
@@ -231,16 +233,26 @@ export default function CreateAuctionPage() {
       const intentId = await auctionHubContract.createAuction(params);
 
       // Show success message with options
-      const userChoice = confirm(
-        `Auction created successfully! Intent ID: ${intentId}\n\n` +
-          `Your auction may take a few moments to appear in "My Auctions" as our keeper processes the blockchain event.\n\n` +
-          `Would you like to go to "My Auctions" page now?`
-      );
+     // Replace the confirm dialog with this:
+toast.success(
+  `Auction created successfully! Intent ID: ${intentId}`,
+  {
+    duration: 3000,
+  }
+);
 
-      if (userChoice) {
-        // Navigate to My Auctions page with parameter
-        router.push("/my_auctions?from=create");
-      }
+toast(
+  `Your auction may take a few moments to appear in "My Auctions" as our keeper processes the blockchain event.`,
+  {
+    duration: 4000,
+    icon: 'ℹ️',
+  }
+);
+
+// Automatically navigate after showing the messages
+setTimeout(() => {
+  router.push("/my_auctions?from=create");
+}, 4500);
 
       console.log("Auction created with Intent ID:", intentId);
 
@@ -258,7 +270,7 @@ export default function CreateAuctionPage() {
       console.error("Error creating auction:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
-      alert(`Failed to create auction: ${errorMessage}`);
+      toast.error(`Failed to create auction: ${errorMessage}`);
     } finally {
       setIsCreating(false);
     }
@@ -266,6 +278,29 @@ export default function CreateAuctionPage() {
 
   return (
     <div className="relative min-h-screen w-full bg-black">
+       <Toaster
+      position="top-right"
+      toastOptions={{
+        duration: 4000,
+        style: {
+          background: '#1a1a1a',
+          color: '#fff',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+        },
+        success: {
+          iconTheme: {
+            primary: '#10b981',
+            secondary: '#fff',
+          },
+        },
+        error: {
+          iconTheme: {
+            primary: '#ef4444',
+            secondary: '#fff',
+          },
+        },
+      }}
+    />
       {/* Background Grid */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]"></div>
 
@@ -437,7 +472,7 @@ export default function CreateAuctionPage() {
                     onChange={(e) => {
                       const minutes = parseFloat(e.target.value) || 0;
                       if (minutes < 2 && minutes > 0) {
-                        alert("Minimum auction duration is 2 minutes");
+                        toast.error("Minimum auction duration is 2 minutes");
                         return;
                       }
                       const hours =
