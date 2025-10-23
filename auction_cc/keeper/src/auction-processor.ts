@@ -1,6 +1,6 @@
-import {ethers} from "ethers";
-import {CONFIG} from "./config";
-import { getAllAuctions,getBids } from "./event-listner";
+import { ethers } from "ethers";
+import { CONFIG } from "./config";
+import { getAllAuctions, getBids, updateAuctionStatus } from "./event-listner";
 import AUCTION_HUB_ABI from "../src/ABI/AUCTION_HUB_ABI.json";
 import BID_MANAGER_ABI from "../src/ABI/BID_MANAGER_ABI.json";
 
@@ -17,7 +17,6 @@ const AuctionStatus = {
 const processingLocks = new Set<string>();
 
 function getChainConfig(chainIdentifier: string | number) {
-    
     const chains = Object.values(CONFIG.chains);
     let config;
     
@@ -62,7 +61,7 @@ const TOKEN_ADDRESS_TO_SYMBOL: { [chainId: number]: { [address: string]: string 
 const STABLE_COIN_DECIMALS: { [symbol: string]: number } = {
     'USDC': 6,
     'USDT': 6,
-    'USDC.e': 6, // Bridged USDC on some chains
+    'USDC.e': 6,
 };
 
 // Stable coins that can be considered equivalent (1:1 ratio)
@@ -74,13 +73,9 @@ function getTokenSymbol(tokenAddress: string, chainId: number): string {
         throw new Error(`Token mapping not found for chain ${chainId}`);
     }
     
-    // Make lookup case-insensitive by normalizing both the key and lookup address
     const normalizedAddress = tokenAddress.toLowerCase();
-    
-    // First try direct lookup
     let symbol = chainTokens[normalizedAddress];
     
-    // If not found, search through all keys case-insensitively
     if (!symbol) {
         for (const [addr, sym] of Object.entries(chainTokens)) {
             if (addr.toLowerCase() === normalizedAddress) {
@@ -118,36 +113,6 @@ function areEquivalentStableCoins(token1: string, token2: string): boolean {
     return isStableCoin(token1) && isStableCoin(token2);
 }
 
-function calculateStableCoinMinimumOut(
-    amountIn: string | bigint, 
-    inputDecimals: number, 
-    outputDecimals: number, 
-    slippagePercent: number = 0.5
-): bigint {
-    // For stable coin swaps, we expect close to 1:1 ratio
-    const amountInBigInt = typeof amountIn === 'string' ? BigInt(amountIn) : amountIn;
-    
-    // Adjust for decimal differences
-    let adjustedAmount: bigint;
-    if (inputDecimals === outputDecimals) {
-        adjustedAmount = amountInBigInt;
-    } else if (inputDecimals > outputDecimals) {
-        // Input has more decimals, divide
-        const decimalDiff = inputDecimals - outputDecimals;
-        adjustedAmount = amountInBigInt / (10n ** BigInt(decimalDiff));
-    } else {
-        // Output has more decimals, multiply
-        const decimalDiff = outputDecimals - inputDecimals;
-        adjustedAmount = amountInBigInt * (10n ** BigInt(decimalDiff));
-    }
-    
-    // Apply slippage (default 0.5% for stable coins)
-    const slippageMultiplier = BigInt(Math.floor((100 - slippagePercent) * 100));
-    const minimumOut = (adjustedAmount * slippageMultiplier) / 10000n;
-    
-    return minimumOut;
-}
-
 function validateStableCoinOnlyAuction(winnerToken: string, requiredToken: string, sourceChainId: number, targetChainId: number): void {
     const winnerSymbol = getTokenSymbol(winnerToken, sourceChainId);
     const requiredSymbol = getTokenSymbol(requiredToken, targetChainId);
@@ -167,12 +132,18 @@ function validateStableCoinOnlyAuction(winnerToken: string, requiredToken: strin
 }
 
 export async function processEndedAuctions() {
-    const allAuctions = getAllAuctions();
+    console.log(`\n[*] 📊 Processing ended auctions... (${new Date().toLocaleTimeString()}) - 10s interval`);
+
+    // ✅ Use database instead of in-memory storage
+    const allAuctions = await getAllAuctions();
     const currentTime = Math.floor(Date.now() / 1000);
 
     if (allAuctions.size === 0) {
+        console.log("   - No auctions found in database");
         return;
     }
+
+    console.log(`   - Found ${allAuctions.size} auctions to check`);
 
     for (const [intentId, auctionData] of allAuctions.entries()) {
         try {
@@ -221,6 +192,11 @@ export async function processEndedAuctions() {
             // Skip if already settled or cancelled
             if (auctionStatus === AuctionStatus.Settled || auctionStatus === AuctionStatus.Cancelled) {
                 console.log(`   - Auction ${intentId.slice(0, 10)}... already completed (status: ${auctionStatus}), skipping...`);
+                
+                // ✅ Update database status if it doesn't match
+                if (auctionData.status !== auctionStatus) {
+                    await updateAuctionStatus(intentId, auctionStatus);
+                }
                 continue;
             }
 
@@ -230,24 +206,20 @@ export async function processEndedAuctions() {
             processingLocks.add(intentId);
             console.log(`   - 🔒 Processing lock acquired for auction ${intentId.slice(0, 10)}...`);
 
-            const bids = getBids(intentId);
+            // ✅ Use database to get bids
+            const bids = await getBids(intentId);
             console.log(`   - Found ${bids.length} bids for this auction`);
-
 
             if (bids.length === 0) {
                 console.log("   - No bids found. Auction needs to be cancelled by seller (keeper cannot cancel).");
-                // Note: cancelAuction() requires seller to call it, not keeper
-                // The seller will need to call cancelAuction() manually
-                // TODO: Add a keeper-specific cancel function in the contract or finalize with 0 amount
-                processingLocks.delete(intentId); // Release lock
+                processingLocks.delete(intentId);
                 continue;
             }
 
             let winner = null;
             let highestBid = BigInt(0);
 
-            // Aggregate bids by bidder address (same logic as BidComponent.tsx)
-            // A bidder can place multiple sequential bids, and they should be summed
+            // Aggregate bids by bidder address
             const bidderMap = new Map<string, { bidder: string; totalAmount: bigint; token: string; sourceChain: string }>();
             
             for (const bid of bids) {
@@ -255,11 +227,9 @@ export async function processEndedAuctions() {
                 const bidAmount = BigInt(bid.amount);
                 
                 if (bidderMap.has(bidderKey)) {
-                    // Add to existing bid total
                     const existing = bidderMap.get(bidderKey)!;
                     existing.totalAmount += bidAmount;
                 } else {
-                    // Create new entry
                     bidderMap.set(bidderKey, {
                         bidder: bid.bidder,
                         totalAmount: bidAmount,
@@ -286,17 +256,10 @@ export async function processEndedAuctions() {
 
             if (!winner || highestBid < reservePrice) {
                 console.log(`   - No valid bids met the reserve price (${ethers.formatUnits(reservePrice, 6)}). Auction needs to be cancelled by seller.`);
-                // Note: cancelAuction() requires seller to call it, not keeper
-                // The seller will need to call cancelAuction() manually
-                // TODO: Add a keeper-specific cancel function or finalize-and-return function in the contract
-                processingLocks.delete(intentId); // Release lock
+                processingLocks.delete(intentId);
                 continue;
             }
 
-            const winnerTokenSymbol = getTokenSymbol(winner.token, getChainConfig(winner.sourceChain)?.id || auctionChain.id);
-            console.log(`   - Winner: ${winner.bidder} with bid of ${formatStableCoinAmount(winner.amount, winnerTokenSymbol)} ${winnerTokenSymbol}`);
-
-            // Step 1: Finalize auction on-chain (mark winner and change status to Finalized)
             // Only finalize if status is Active
             if (auctionStatus === AuctionStatus.Active) {
                 console.log("   - Step 1: Finalizing auction (marking winner)...");
@@ -305,37 +268,33 @@ export async function processEndedAuctions() {
                     await finalizeTx.wait();
                     console.log(`   - ✓ Auction finalized (status: Active → Finalized). Tx: ${finalizeTx.hash}`);
                     
-                    // Update local auction status
-                    auctionData.status = AuctionStatus.Finalized;
-                    allAuctions.set(intentId, auctionData);
+                    // ✅ Update database status
+                    await updateAuctionStatus(intentId, AuctionStatus.Finalized);
                 } catch (error: any) {
                     console.error("   - ✗ Failed to finalize auction:", error?.message || error);
                     if (error?.message?.includes("Auction not ended")) {
                         console.error("   - ⚠️  Blockchain time may not have reached deadline yet. Will retry next cycle.");
-                        processingLocks.delete(intentId); // Release lock before retry
+                        processingLocks.delete(intentId);
                         continue;
                     }
-                    // For other errors, log but continue to try settlement
                 }
             } else if (auctionStatus === AuctionStatus.Finalized) {
                 console.log("   - Step 1: Auction already finalized, proceeding to settlement...");
             }
 
-            // Step 2: Cross-chain settlement (transfer funds)
+            // Step 2: Cross-chain settlement
             console.log("   - Step 2: Starting cross-chain settlement...");
             try {
                 await settleCrossChainAuction(intentId, auction, winner, bids, auctionData.sourceChain);
                 console.log(`   - ✓ Cross-chain settlement completed for auction ${intentId.slice(0, 10)}...`);
+                
+                // ✅ Update database status to settled
+                await updateAuctionStatus(intentId, AuctionStatus.Settled);
             } catch (error: any) {
                 console.error(`   - ✗ Settlement failed for auction ${intentId.slice(0, 10)}...:`, error?.message || error);
-                // Release lock and don't update status - will retry next cycle
                 processingLocks.delete(intentId);
                 continue;
             }
-            
-            // Update local auction status to settled
-            auctionData.status = AuctionStatus.Settled;
-            allAuctions.set(intentId, auctionData);
 
             // Release processing lock after successful completion
             processingLocks.delete(intentId);
@@ -343,10 +302,11 @@ export async function processEndedAuctions() {
 
         } catch (error) {
             console.error(`   - Error processing auction ${intentId.slice(0, 10)}...:`, error);
-            // Always release lock on error
             processingLocks.delete(intentId);
         }
     }
+
+    console.log(`[*] Finished processing auctions (${new Date().toLocaleTimeString()})\n`);
 }
 
 async function settleCrossChainAuction(intentId: string, auction: any, winner: any, allBids: any[], sourceChain: string) {
@@ -355,19 +315,21 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         
         const sourceChainConfig = getChainConfig(sourceChain);
 
+        // Handle preferred chain properly - it might be stored as different property names
         let targetChainConfig;
         if (auction.preferdChain !== undefined && auction.preferdChain !== null && auction.preferdChain !== "") {
+            // try numeric id first
             const numericId = Number(auction.preferdChain);
             if (!isNaN(numericId) && numericId !== 0) {
                 targetChainConfig = Object.values(CONFIG.chains).find(c => Number(c.id) === numericId);
             }
+            // fallback: try using getChainConfig (handles name or id)
             if (!targetChainConfig) {
                 targetChainConfig = getChainConfig(auction.preferdChain as any);
             }
         }
         
-        const targetConfig = targetChainConfig ;
-        
+        const targetConfig = targetChainConfig;
         const targetChain = targetConfig;
         
         if (!sourceChainConfig || !targetChain) {
@@ -379,8 +341,9 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         }
 
         console.log(`   - Source chain: ${sourceChain} (${sourceChainConfig.name})`);
-        console.log(`   - Target chain: ${targetChain} (${targetConfig.name})`);
+        console.log(`   - Target chain: ${targetChain.name} (${targetConfig.id})`);
 
+        // Get BidManager contract on winner's chain to release the winning bid
         const winnerChainConfig = getChainConfig(winner.sourceChain);
         if (!winnerChainConfig) {
             throw new Error(`Winner's chain configuration not found: ${winner.sourceChain}`);
@@ -398,49 +361,67 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
         const releaseTx = await bidManager.releaseWinningBid(intentId, winner.bidder, auction.seller);
         await releaseTx.wait();
         console.log(`   - ✅ Winning bid released to seller on ${winnerChainConfig.name}. Tx: ${releaseTx.hash}`);
-        
+
         const winnerTokenAddress = winner.token;
-        const requiredTokenAddress = auction.preferdToken || auction.preferdToken;
+        const requiredTokenAddress = auction.preferdToken;
         const bidAmount = winner.amount;
-        
+
+        // Validate that we're working with stable coins as expected
         validateStableCoinOnlyAuction(winnerTokenAddress, requiredTokenAddress, winnerChainConfig.id, targetConfig.id);
-        
+
+        // Convert token addresses to symbols
         const winnerTokenSymbol = getTokenSymbol(winnerTokenAddress, winnerChainConfig.id);
         const requiredTokenSymbol = getTokenSymbol(requiredTokenAddress, targetConfig.id);
-        
+
         console.log(`   - Winner token: ${winnerTokenSymbol} (${formatStableCoinAmount(bidAmount, winnerTokenSymbol)})`);
         console.log(`   - Required token: ${requiredTokenSymbol}`);
         console.log(`   - Current location: ${winnerChainConfig.name} (${winnerChainConfig.id})`);
         console.log(`   - Preferred destination: ${targetConfig.name} (${targetConfig.id})`);
-        
+
+        // ✅ UPDATED: No automatic cross-chain transfer - seller must claim manually
         if (winnerChainConfig.id === targetConfig.id && winnerTokenSymbol === requiredTokenSymbol) {
-            console.log(`   - 🎉 Funds already on seller's preferred chain with correct token!`);
+            console.log(`   - 🎉 Perfect match! Funds already on seller's preferred chain with correct token!`);
             console.log(`   - ✅ No additional action needed - settlement complete`);
-        } else if (winnerChainConfig.id !== targetConfig.id && winnerTokenSymbol === requiredTokenSymbol) {
-            console.log(`   - 🌉 Cross-chain bridge needed (same token, different chain)`);
-            console.log(`   - 💰 ${formatStableCoinAmount(bidAmount, winnerTokenSymbol)} ${winnerTokenSymbol}`);
-            console.log(`   - 📍 From: ${winnerChainConfig.name} → To: ${targetConfig.name}`);
-            console.log(`   - 💡 Seller will bridge via frontend "Claim Tokens" button using Avail Nexus SDK`);
-        } else if (winnerTokenSymbol !== requiredTokenSymbol) {
-            console.log(`   - 🔄 Bridge + Swap needed (different token and/or chain)`);
-            console.log(`   - 💰 ${formatStableCoinAmount(bidAmount, winnerTokenSymbol)} ${winnerTokenSymbol} → ${requiredTokenSymbol}`);
-            console.log(`   - 📍 From: ${winnerChainConfig.name} → To: ${targetConfig.name}`);
-            console.log(`   - 💡 Seller will bridge and swap via frontend "Claim Tokens" button using Avail Nexus SDK`);
+            console.log(`   - 💰 Seller has: ${formatStableCoinAmount(bidAmount, winnerTokenSymbol)} ${winnerTokenSymbol} on ${winnerChainConfig.name}`);
         } else {
-            console.log(`   - 🌉 Cross-chain delivery scenario detected`);
-            console.log(`   - 💡 Seller will claim via frontend using Avail Nexus SDK`);
+            // All other cases require manual intervention via frontend
+            console.log(`   - 🔄 Cross-chain/token transfer needed - manual claim required`);
+            console.log(`   - 💰 Available: ${formatStableCoinAmount(bidAmount, winnerTokenSymbol)} ${winnerTokenSymbol} on ${winnerChainConfig.name}`);
+            console.log(`   - 🎯 Target: ${requiredTokenSymbol} on ${targetConfig.name}`);
+            
+            if (winnerChainConfig.id !== targetConfig.id && winnerTokenSymbol === requiredTokenSymbol) {
+                console.log(`   - 🌉 Same token, different chain - bridge needed`);
+                console.log(`   - 📍 Bridge: ${winnerChainConfig.name} → ${targetConfig.name}`);
+            } else if (winnerChainConfig.id === targetConfig.id && winnerTokenSymbol !== requiredTokenSymbol) {
+                console.log(`   - 🔄 Same chain, different token - swap needed`);
+                console.log(`   - 🔀 Swap: ${winnerTokenSymbol} → ${requiredTokenSymbol} on ${winnerChainConfig.name}`);
+            } else {
+                console.log(`   - 🌉🔄 Both bridge and swap needed`);
+                console.log(`   - 📍 Bridge: ${winnerChainConfig.name} → ${targetConfig.name}`);
+                console.log(`   - 🔀 Swap: ${winnerTokenSymbol} → ${requiredTokenSymbol}`);
+            }
+            
+            console.log(`   - 💡 Seller must use frontend "Claim Auction Proceeds" button to:`);
+            console.log(`   - 📱 Bridge funds using Avail Nexus SDK`);
+            if (winnerTokenSymbol !== requiredTokenSymbol && areEquivalentStableCoins(winnerTokenSymbol, requiredTokenSymbol)) {
+                console.log(`   - 🔀 Swap ${winnerTokenSymbol} to ${requiredTokenSymbol} (stable coin swap)`);
+            }
+            console.log(`   - ✅ This demonstrates proper user-initiated Nexus SDK usage`);
         }
         
-        console.log(`   - 📝 Frontend claim demonstrates proper Nexus SDK usage (user-initiated transfers)`);
-        console.log(`   - ✅ Fund release phase completed`);
+        console.log(`   - 📝 Backend only releases funds - frontend handles cross-chain operations`);
+        console.log(`   - ✅ Fund release phase completed successfully`);
 
         // Refund losing bidders
         console.log(`   - Refunding losing bidders...`);
         for (const bid of allBids) {
-            if (bid.bidder !== winner.bidder) {
+            if (bid.bidder.toLowerCase() !== winner.bidder.toLowerCase()) {
                 try {
                     const bidChainConfig = getChainConfig(bid.sourceChain);
-                    if (!bidChainConfig) continue;
+                    if (!bidChainConfig) {
+                        console.warn(`   - ⚠️  Chain config not found for bid on ${bid.sourceChain}, skipping refund`);
+                        continue;
+                    }
 
                     const bidProvider = new ethers.JsonRpcProvider(bidChainConfig.rpcUrl);
                     const bidManagerContract = new ethers.Contract(
@@ -451,20 +432,24 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
 
                     const refundTx = await bidManagerContract.refundBid(intentId, bid.bidder);
                     await refundTx.wait();
-                    console.log(`   - Refunded ${bid.bidder} on ${bid.sourceChain}. Tx: ${refundTx.hash}`);
+                    
+                    const bidTokenSymbol = getTokenSymbol(bid.token, bidChainConfig.id);
+                    const bidAmount = formatStableCoinAmount(bid.amount, bidTokenSymbol);
+                    console.log(`   - ✅ Refunded ${bid.bidder.slice(0, 8)}... → ${bidAmount} ${bidTokenSymbol} on ${bid.sourceChain}. Tx: ${refundTx.hash}`);
                 } catch (error) {
-                    console.error(`   - Failed to refund bidder ${bid.bidder}:`, error);
+                    console.error(`   - ❌ Failed to refund bidder ${bid.bidder.slice(0, 8)}... on ${bid.sourceChain}:`, error);
+                    // Continue with other refunds even if one fails
                 }
             }
         }
 
         // Finally, release the NFT to the winner
         console.log(`   - Releasing NFT to winner...`);
-        // Use sourceChain from function parameter, not from auction object
         const auctionChainConfig = getChainConfig(sourceChain);
         if (!auctionChainConfig) {
             throw new Error(`Auction chain configuration not found for sourceChain: ${sourceChain}`);
         }
+        
         const auctionProvider = new ethers.JsonRpcProvider(auctionChainConfig.rpcUrl);
         const auctionHub = new ethers.Contract(
             auctionChainConfig.auctionHubAddress,
@@ -474,12 +459,16 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
 
         const nftReleaseTx = await auctionHub.NFTrelease(intentId);
         await nftReleaseTx.wait();
-        console.log(`   - NFT released to winner. Tx: ${nftReleaseTx.hash}`);
+        console.log(`   - ✅ NFT released to winner ${winner.bidder.slice(0, 8)}... Tx: ${nftReleaseTx.hash}`);
+        console.log(`   - 🎨 NFT Contract: ${auction.nftContract} Token ID: ${auction.tokenId}`);
 
-        console.log(`   - Cross-chain settlement completed successfully for auction ${intentId.slice(0, 10)}...`);
+        console.log(`   - ✅ Cross-chain settlement completed successfully for auction ${intentId.slice(0, 10)}...`);
+        console.log(`   - 🏆 Winner: ${winner.bidder.slice(0, 8)}... gets the NFT`);
+        console.log(`   - 💰 Seller: ${auction.seller.slice(0, 8)}... gets ${formatStableCoinAmount(bidAmount, winnerTokenSymbol)} ${winnerTokenSymbol}`);
+        console.log(`   - 📱 Seller uses frontend to claim cross-chain funds if needed`);
 
     } catch (error) {
-        console.error(`   - Error in cross-chain settlement for auction ${intentId.slice(0, 10)}...:`, error);
+        console.error(`   - ❌ Error in cross-chain settlement for auction ${intentId.slice(0, 10)}...:`, error);
         throw error;
     }
 }

@@ -5,11 +5,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
-console.log('🚀 Starting Auction Keeper...');
+console.log('🚀 Starting Auction Keeper with MongoDB...');
 console.log('📁 Working directory:', process.cwd());
 console.log('🔧 Node environment:', process.env.NODE_ENV || 'development');
 const event_listner_1 = require("./event-listner");
 const auction_processor_1 = require("./auction-processor");
+const db_service_1 = require("./DB/db_service");
 const config_1 = require("./config");
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
@@ -20,19 +21,29 @@ app.use(express_1.default.json());
 // Event listeners management
 let eventListenerInterval = null;
 let auctionProcessingInterval = null;
+// Initialize database connection
+async function initializeDatabase() {
+    console.log('📊 Connecting to MongoDB...');
+    try {
+        await db_service_1.dbService.connect();
+        console.log('✅ Database connection established');
+    }
+    catch (error) {
+        console.error('❌ Failed to connect to database:', error);
+        process.exit(1);
+    }
+}
 // Initialize event listeners once and keep them alive
 async function initializeEventMonitoring() {
     console.log('🔄 Initializing event monitoring...');
     // Start event listeners once - they will stay active
     await (0, event_listner_1.startEventListeners)();
-    // Note: Event listeners will remain active and automatically reconnect if needed
-    // No need to restart them periodically as it causes missed events
     console.log('✅ Event monitoring initialized - listeners will remain active');
 }
 // Initialize auction processing
 function initializeAuctionProcessing() {
     console.log('⏰ Initializing auction processing...');
-    // Process auctions every 2 minutes
+    // Process auctions every 10 seconds
     auctionProcessingInterval = setInterval(async () => {
         try {
             await (0, auction_processor_1.processEndedAuctions)();
@@ -44,21 +55,41 @@ function initializeAuctionProcessing() {
     console.log(`✅ Auction processing initialized with ${config_1.CONFIG.processingInterval}ms interval`);
 }
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+    const dbHealth = await db_service_1.dbService.healthCheck();
     res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         environment: process.env.NODE_ENV || 'development',
+        database: dbHealth,
         eventListening: !!eventListenerInterval,
         auctionProcessing: !!auctionProcessingInterval
     });
 });
-// Get all auctions
-app.get('/api/auctions', (req, res) => {
+// Get database statistics
+app.get('/api/stats', async (req, res) => {
     try {
-        const auctions = (0, event_listner_1.getAllAuctions)();
-        const auctionsArray = Array.from(auctions.entries()).map(([intentId, auction]) => ({
+        const stats = await db_service_1.dbService.getStats();
+        res.json({
+            success: true,
+            data: stats
+        });
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch statistics',
+            details: errorMessage
+        });
+    }
+});
+// Get all auctions
+app.get('/api/auctions', async (req, res) => {
+    try {
+        const allAuctions = await (0, event_listner_1.getAllAuctions)();
+        const auctionsArray = Array.from(allAuctions.entries()).map(([intentId, auction]) => ({
             intentId,
             seller: auction.seller,
             nftContract: auction.nftContract,
@@ -90,11 +121,11 @@ app.get('/api/auctions', (req, res) => {
     }
 });
 // Get specific auction by intentId
-app.get('/api/auctions/:intentId', (req, res) => {
+app.get('/api/auctions/:intentId', async (req, res) => {
     try {
         const { intentId } = req.params;
-        const auctions = (0, event_listner_1.getAllAuctions)();
-        const auction = auctions.get(intentId);
+        const allAuctions = await (0, event_listner_1.getAllAuctions)();
+        const auction = allAuctions.get(intentId);
         if (!auction) {
             return res.status(404).json({
                 success: false,
@@ -131,9 +162,9 @@ app.get('/api/auctions/:intentId', (req, res) => {
     }
 });
 // Get all bids
-app.get('/api/bids', (req, res) => {
+app.get('/api/bids', async (req, res) => {
     try {
-        const allBids = (0, event_listner_1.getAllBids)();
+        const allBids = await (0, event_listner_1.getAllBids)();
         const bidsArray = Array.from(allBids.entries()).map(([intentId, bids]) => ({
             intentId,
             bids: bids.map(bid => ({
@@ -163,10 +194,10 @@ app.get('/api/bids', (req, res) => {
     }
 });
 // Get bids for specific auction
-app.get('/api/bids/:intentId', (req, res) => {
+app.get('/api/bids/:intentId', async (req, res) => {
     try {
         const { intentId } = req.params;
-        const allBids = (0, event_listner_1.getAllBids)();
+        const allBids = await (0, event_listner_1.getAllBids)();
         const bids = allBids.get(intentId) || [];
         const serializedBids = bids.map(bid => ({
             intentId: bid.intentId,
@@ -243,7 +274,7 @@ app.use((req, res) => {
     });
 });
 // Graceful shutdown function
-function gracefulShutdown() {
+async function gracefulShutdown() {
     console.log('\n🛑 Shutting down keeper...');
     if (eventListenerInterval) {
         clearInterval(eventListenerInterval);
@@ -253,12 +284,31 @@ function gracefulShutdown() {
         clearInterval(auctionProcessingInterval);
         console.log('✅ Auction processing interval cleared');
     }
+    // Disconnect from database
+    try {
+        await db_service_1.dbService.disconnect();
+        console.log('✅ Database disconnected');
+    }
+    catch (error) {
+        console.error('❌ Error disconnecting from database:', error);
+    }
     process.exit(0);
 }
-// Initialize monitoring and processing for all environments
-console.log('🚀 Starting keeper in production mode...');
-initializeEventMonitoring();
-initializeAuctionProcessing();
+// Initialize everything
+async function initialize() {
+    try {
+        await initializeDatabase();
+        await initializeEventMonitoring();
+        initializeAuctionProcessing();
+        console.log('🎉 Keeper fully initialized with MongoDB!');
+    }
+    catch (error) {
+        console.error('❌ Failed to initialize keeper:', error);
+        process.exit(1);
+    }
+}
+// Start the initialization
+initialize();
 // Export the Express app for Vercel
 exports.default = app;
 // For local development and production
@@ -266,15 +316,18 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
     console.log(`🌐 Keeper API server running on port ${PORT}`);
     console.log(`📡 Health check: http://localhost:${PORT}/health`);
+    console.log(`📊 Statistics: http://localhost:${PORT}/api/stats`);
     console.log(`📋 Available API endpoints:`);
     console.log(`   GET  /health                 - Health check`);
+    console.log(`   GET  /api/stats              - Database statistics`);
     console.log(`   GET  /api/auctions           - Get all auctions`);
     console.log(`   GET  /api/auctions/:id       - Get specific auction`);
     console.log(`   GET  /api/bids               - Get all bids`);
     console.log(`   GET  /api/bids/:id           - Get bids for auction`);
     console.log(`   GET  /api/config             - Get keeper configuration`);
-    console.log(`🔄 Event listeners refresh every 60 seconds`);
+    console.log(`🔄 Event listeners active`);
     console.log(`⏰ Auction processing every ${config_1.CONFIG.processingInterval}ms`);
+    console.log(`📊 MongoDB integration enabled`);
 });
 // Handle shutdown signals
 process.on('SIGINT', gracefulShutdown);
