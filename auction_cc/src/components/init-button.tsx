@@ -1,6 +1,7 @@
 "use client";
 
 import { useAccount } from "wagmi";
+import {toast,Toaster} from 'react-hot-toast';
 import { initializeWithProvider, isInitialized } from "../lib/nexus/nexusClient";
 
 export default function InitButton({
@@ -21,14 +22,40 @@ export default function InitButton({
       // We're calling our wrapper function from the lib/nexus.ts file here.
       await initializeWithProvider(provider);
       onReady?.();
-      alert("Nexus initialized");
+      toast.success("Nexus initialized");
     } catch (e: any) {
-      alert(e?.message ?? "Init failed");
+      toast.error(e?.message ?? "Init failed");
     }
   };
   return (
-    <button className={className} onClick={onClick} disabled={isInitialized()}>
-      Initialize Nexus
-    </button>
+    <div>
+      <Toaster
+          position="top-right"
+          toastOptions={{
+            duration: 4000,
+            style: {
+              background: '#1a1a1a',
+              color: '#fff',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+            },
+            success: {
+              iconTheme: {
+                primary: '#10b981',
+                secondary: '#fff',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#fff',
+              },
+            },
+          }}
+        />
+      <button className={className} onClick={onClick} disabled={isInitialized()}>
+        Initialize Nexus
+      </button>
+      
+    </div>
   );
 }

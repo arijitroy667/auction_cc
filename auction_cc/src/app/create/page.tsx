@@ -55,6 +55,10 @@ export default function CreateAuctionPage() {
     return () => clearInterval(interval);
   }, [initialized]);
 
+  const truncateError = (msg: string, maxLength = 80) => {
+  return msg.length > maxLength ? msg.slice(0, maxLength) + '...' : msg;
+  };
+
   // Handler for NFT selection
   const handleNFTSelect = (contractAddress: string, tokenId: string) => {
     setAuctionForm({
@@ -112,7 +116,7 @@ export default function CreateAuctionPage() {
       console.error("Error approving NFT:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to approve NFT: ${errorMessage}`);
+      toast.error(`Failed to approve NFT: ${truncateError(errorMessage)}`);
     } finally {
       setIsApproving(false);
     }
@@ -188,7 +192,7 @@ export default function CreateAuctionPage() {
       try {
         const owner = await nftContract.ownerOf(auctionForm.tokenId);
         if (owner.toLowerCase() !== userAddress.toLowerCase()) {
-          toast.error(`You don't own this NFT. Current owner: ${owner}`);
+          toast.error(`You don't own this NFT. Owner: ${owner.slice(0, 6)}...${owner.slice(-4)}`);
           return;
         }
       } catch (error) {
@@ -234,20 +238,8 @@ export default function CreateAuctionPage() {
 
       // Show success message with options
      // Replace the confirm dialog with this:
-toast.success(
-  `Auction created successfully! Intent ID: ${intentId}`,
-  {
-    duration: 3000,
-  }
-);
-
-toast(
-  `Your auction may take a few moments to appear in "My Auctions" as our keeper processes the blockchain event.`,
-  {
-    duration: 4000,
-    icon: 'ℹ️',
-  }
-);
+toast.success(`Auction created! ID: ${intentId.slice(0, 10)}...`, { duration: 3000 });
+toast(`Redirecting to "My Auctions" page...`, { duration: 4000, icon: 'ℹ️' });
 
 // Automatically navigate after showing the messages
 setTimeout(() => {
@@ -270,7 +262,7 @@ setTimeout(() => {
       console.error("Error creating auction:", error);
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Failed to create auction: ${errorMessage}`);
+      toast.error(`Failed to create auction: ${truncateError(errorMessage)}`);
     } finally {
       setIsCreating(false);
     }
@@ -301,6 +293,7 @@ setTimeout(() => {
         },
       }}
     />
+    
       {/* Background Grid */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]"></div>
 

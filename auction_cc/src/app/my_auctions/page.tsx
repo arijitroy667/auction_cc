@@ -11,6 +11,7 @@ import { getAuctionHubContract } from "@/lib/auctionHub";
 import { detectPendingClaim, markClaimAsCompleted } from "@/lib/claimDetection";
 import { result as bridgeTokens } from '@/components/bridge/bridge';
 import { sdk } from "@/lib/nexus/nexusClient";
+import { toast, Toaster } from 'react-hot-toast';
 import { TOKEN_ADDRESSES } from "@/lib/constants";
 import type { BridgeAndExecuteParams, BridgeAndExecuteResult } from '@avail-project/nexus-core';
 // Import Nexus swap for mainnet deployment
@@ -220,20 +221,20 @@ export default function MyAuctionsPage() {
 
   const cancelAuction = async (auction: Auction) => {
     if (!isConnected || !address) {
-      alert("Please connect your wallet");
+      toast.error("Please connect your wallet");
       return;
     }
 
     const bids = auctionBids[auction.intentId] || [];
     if (bids.length > 0) {
-      alert("Cannot cancel auction with existing bids");
+      toast.error("Cannot cancel auction with existing bids");
       return;
     }
 
     const now = Math.floor(Date.now() / 1000);
     const deadline = parseInt(auction.deadline);
     if (deadline <= now) {
-      alert("Cannot cancel auction that has already ended");
+      toast.error("Cannot cancel auction that has already ended");
       return;
     }
 
@@ -262,7 +263,7 @@ export default function MyAuctionsPage() {
         )
       );
 
-      alert("Auction cancelled successfully! Your NFT has been returned.");
+      toast.success("Auction cancelled successfully! Your NFT has been returned.");
 
       // Refresh the auctions list after a short delay to get keeper updates
       setTimeout(() => {
@@ -290,7 +291,7 @@ export default function MyAuctionsPage() {
         }
       }
 
-      alert(`Failed to cancel auction: ${errorMessage}`);
+      toast.error(`Failed to cancel auction: ${errorMessage}`);
     } finally {
       setCancelling(null);
     }
@@ -299,12 +300,12 @@ export default function MyAuctionsPage() {
   // Comprehensive claim handler with 3 cases
   const handleClaim = async (auction: Auction) => {
     if (!isConnected || !address) {
-      alert("Please connect your wallet");
+      toast.error("Please connect your wallet");
       return;
     }
 
     if (!initialized) {
-      alert("Please initialize Nexus first to enable cross-chain operations");
+      toast.error("Please initialize Nexus first to enable cross-chain operations");
       return;
     }
 
@@ -339,7 +340,7 @@ export default function MyAuctionsPage() {
       if (sameChain && sameToken) {
         console.log('[Claim] ✅ Funds already on correct chain with correct token - no action needed');
         markClaimAsCompleted(auction.intentId);
-        alert(`Funds are already on ${claim.preferredChainName} with ${claim.preferredTokenSymbol}. No claim action needed!`);
+        toast.error(`Funds are already on ${claim.preferredChainName} with ${claim.preferredTokenSymbol}. No claim action needed!`);
         fetchMyAuctions();
         setClaimingAuction(null);
         return;
@@ -363,7 +364,7 @@ export default function MyAuctionsPage() {
        *     
        *     if (swapResult && swapResult.success) {
        *       markClaimAsCompleted(auction.intentId);
-       *       alert(`Successfully swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.currentChainName} using Nexus Swap`);
+       *       toast.success(`Successfully swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.currentChainName} using Nexus Swap`);
        *       setTimeout(() => fetchMyAuctions(), 2000);
        *       return;
        *     } else {
@@ -436,7 +437,7 @@ export default function MyAuctionsPage() {
         console.log('[Claim] ✓ Swap completed:', receipt);
 
         markClaimAsCompleted(auction.intentId);
-        alert(`Successfully swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.currentChainName}`);
+        toast.success(`Successfully swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.currentChainName}`);
         setTimeout(() => fetchMyAuctions(), 2000);
         return;
       }
@@ -456,7 +457,7 @@ export default function MyAuctionsPage() {
 
         if (result) {
           markClaimAsCompleted(auction.intentId);
-          alert(`Successfully bridged ${humanReadableAmount} ${claim.currentTokenSymbol} from ${claim.currentChainName} to ${claim.preferredChainName}`);
+          toast.success(`Successfully bridged ${humanReadableAmount} ${claim.currentTokenSymbol} from ${claim.currentChainName} to ${claim.preferredChainName}`);
           setTimeout(() => fetchMyAuctions(), 2000);
         } else {
           throw new Error('Bridge transaction failed');
@@ -526,7 +527,7 @@ export default function MyAuctionsPage() {
 
         if (bridgeAndExecuteResult) {
           markClaimAsCompleted(auction.intentId);
-          alert(`Successfully bridged and swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.preferredChainName}`);
+          toast.success(`Successfully bridged and swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.preferredChainName}`);
           setTimeout(() => fetchMyAuctions(), 2000);
         } else {
           throw new Error('Bridge and execute failed');
@@ -546,7 +547,7 @@ export default function MyAuctionsPage() {
         }
       }
       
-      alert(`Failed to claim: ${errorMessage}`);
+      toast.error(`Failed to claim: ${errorMessage}`);
     } finally {
       setClaimingAuction(null);
     }
@@ -663,6 +664,29 @@ export default function MyAuctionsPage() {
 
   return (
     <div className="relative min-h-screen w-full bg-black">
+      <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#1a1a1a',
+                color: '#fff',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+              },
+              success: {
+                iconTheme: {
+                  primary: '#10b981',
+                  secondary: '#fff',
+                },
+              },
+              error: {
+                iconTheme: {
+                  primary: '#ef4444',
+                  secondary: '#fff',
+                },
+              },
+            }}
+          />
       {/* Background Grid */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]"></div>
 

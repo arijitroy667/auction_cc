@@ -3,6 +3,7 @@ import { useAccount, useWalletClient } from 'wagmi';
 import { useNotification } from '@blockscout/app-sdk';
 import { useTransactionPopup } from '@blockscout/app-sdk';
 import { ethers } from 'ethers';
+import { toast, Toaster } from 'react-hot-toast';
 import { result as nexusTransfer } from './transfer/transfer';
 import { resultForToken } from './unified_balance/fetch-unified-balance';
 import { TOKEN_ADDRESSES, SUPPORTED_TOKENS, CHAIN_NAMES, BID_MANAGER_ADDRESS, type SupportedToken } from '@/lib/constants';
@@ -185,18 +186,18 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isConnected || !address) {
-      alert('Please connect your wallet first');
+      toast.error('Please connect your wallet first');
       return;
     }
 
     if (!walletClient) {
-      alert('Wallet client not available');
+      toast.error('Wallet client not available');
       return;
     }
 
     const newTotalBidAmount = parseFloat(amount);
     if (isNaN(newTotalBidAmount) || newTotalBidAmount <= 0) {
-      alert('Please enter a valid bid amount');
+      toast.error('Please enter a valid bid amount');
       return;
     }
 
@@ -204,12 +205,12 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
     if (existingBid > 0) {
       // Validate that user is bidding from the same chain as their first bid
       if (existingBidChain !== null && selectedChain !== existingBidChain) {
-        alert(`You can only bid from ${CHAIN_NAMES[existingBidChain as keyof typeof CHAIN_NAMES]}, the chain where you placed your first bid.`);
+        toast.error(`You can only bid from ${CHAIN_NAMES[existingBidChain as keyof typeof CHAIN_NAMES]}, the chain where you placed your first bid.`);
         return;
       }
       
       if (newTotalBidAmount <= existingBid) {
-        alert(`Your new bid must be higher than your total existing bid of $${existingBid.toFixed(2)} (across all chains)`);
+        toast.error(`Your new bid must be higher than your total existing bid of $${existingBid.toFixed(2)} (across all chains)`);
         return;
       }
       
@@ -224,22 +225,22 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
     if (highestBid === 0) {
       // First bidder: must bid at least the reserve price, up to starting price
       if (newTotalBidAmount < reservePriceNum) {
-        alert(`First bid must be at least $${reservePriceNum.toFixed(2)} (reserve price)`);
+        toast.error(`First bid must be at least $${reservePriceNum.toFixed(2)} (reserve price)`);
         return;
       }
       if (newTotalBidAmount > startingPriceNum) {
-        alert(`Bid cannot exceed $${startingPriceNum.toFixed(2)} (maximum price)`);
+        toast.error(`Bid cannot exceed $${startingPriceNum.toFixed(2)} (maximum price)`);
         return;
       }
     } else {
       // Subsequent bidders: must bid HIGHER than the current highest bid
       // and cannot exceed the starting price (maximum)
       if (newTotalBidAmount <= highestBid) {
-        alert(`Your bid must be higher than the current highest bid of $${highestBid.toFixed(2)}`);
+        toast.error(`Your bid must be higher than the current highest bid of $${highestBid.toFixed(2)}`);
         return;
       }
       if (newTotalBidAmount > startingPriceNum) {
-        alert(`Bid cannot exceed $${startingPriceNum.toFixed(2)} (maximum price)`);
+        toast.error(`Bid cannot exceed $${startingPriceNum.toFixed(2)} (maximum price)`);
         return;
       }
     }
@@ -250,7 +251,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
     const incrementalAmount = Math.round(rawIncrementalAmount * 1e6) / 1e6;
 
     if (incrementalAmount > unifiedBalance) {
-      alert(`Insufficient balance. You need $${incrementalAmount.toFixed(2)} more, but only have $${unifiedBalance.toFixed(2)} ${selectedToken} available across all chains.`);
+      toast.error(`Insufficient balance. You need $${incrementalAmount.toFixed(2)} more, but only have $${unifiedBalance.toFixed(2)} ${selectedToken} available across all chains.`);
       return;
     }
 
@@ -317,6 +318,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
       await new Promise(resolve => setTimeout(resolve, 3000));
       await tx.wait();
+      toast.success('Bid placed successfully!');
 
        openTxToast(String(selectedChain), tx.hash);
        
@@ -331,7 +333,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
       onClose();
     } catch (error) {
       console.error('Bid failed:', error);
-      alert(`Failed to place bid: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast.error(`Failed to place bid: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -339,6 +341,29 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+      <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#1a1a1a',
+                color: '#fff',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+              },
+              success: {
+                iconTheme: {
+                  primary: '#10b981',
+                  secondary: '#fff',
+                },
+              },
+              error: {
+                iconTheme: {
+                  primary: '#ef4444',
+                  secondary: '#fff',
+                },
+              },
+            }}
+          />
       <div className="bg-zinc-900 rounded-xl p-6 w-full max-w-md border border-zinc-800">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-white">Place Bid</h3>

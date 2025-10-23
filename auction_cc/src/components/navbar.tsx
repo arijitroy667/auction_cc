@@ -6,6 +6,7 @@ import {
   initializeWithProvider,
   isInitialized,
 } from "../lib/nexus/nexusClient";
+import {toast, Toaster} from 'react-hot-toast';
 import { result as fetchUnifiedBalance } from "../components/unified_balance/fetch-unified-balance";
 import { useAccount } from "wagmi";
 
@@ -51,18 +52,18 @@ export default function Navbar({
   // Manual Nexus initialization
   const handleManualNexusInit = async () => {
     if (!isConnected) {
-      alert("Please connect your wallet first");
+      toast.error("Please connect your wallet first");
       return;
     }
 
     if (nexusInitialized || isInitialized()) {
-      alert("Nexus is already initialized");
+      toast.error("Nexus is already initialized");
       return;
     }
 
     const provider = (window as any).ethereum;
     if (!provider) {
-      alert("No ethereum provider found");
+      toast.error("No ethereum provider found");
       return;
     }
 
@@ -70,10 +71,10 @@ export default function Navbar({
       setIsInitializing(true);
       await initializeWithProvider(provider);
       setNexusInitialized(true);
-      alert("Nexus initialized successfully!");
+      toast.success("Nexus initialized successfully!");
     } catch (error) {
       console.error("Failed to initialize Nexus:", error);
-      alert("Failed to initialize Nexus. Please try again.");
+      toast.error("Failed to initialize Nexus. Please try again.");
     } finally {
       setIsInitializing(false);
     }
@@ -106,6 +107,30 @@ export default function Navbar({
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50">
+         <Toaster
+            position="top-right"
+            toastOptions={{
+              duration: 4000,
+              style: {
+                background: '#1a1a1a',
+                color: '#fff',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+              },
+              success: {
+                iconTheme: {
+                  primary: '#10b981',
+                  secondary: '#fff',
+                },
+              },
+              error: {
+                iconTheme: {
+                  primary: '#ef4444',
+                  secondary: '#fff',
+                },
+              },
+            }}
+          />
+          
       <nav
         className={`relative transition-all duration-300 ${
           scrolled
