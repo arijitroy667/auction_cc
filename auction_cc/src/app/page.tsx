@@ -13,7 +13,6 @@ export default function Page() {
   const [balances, setBalances] = useState<any>(null);
   const [assetDatum, setAssetDatum] = useState<any>(null);
 
-  // Check for Nexus initialization status changes
   useEffect(() => {
     const checkInitialization = () => {
       const nexusReady = isInitialized();

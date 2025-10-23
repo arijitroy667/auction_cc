@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount, useWalletClient } from "wagmi";
+import { useAccount, useWalletClient, useChainId } from "wagmi";
 import { isInitialized } from "@/lib/nexus/nexusClient";
 import { useNotification } from '@blockscout/app-sdk';
 import Navbar from "@/components/navbar";
@@ -9,6 +9,7 @@ import Link from "next/link";
 import { ethers } from "ethers";
 import { getAuctionHubContract } from "@/lib/auctionHub";
 import { useRouter } from "next/navigation";
+import NFTSelector from "@/components/NFTSelector";
 import {
   SUPPORTED_TOKENS,
   CHAIN_NAMES,
@@ -18,8 +19,9 @@ import {
 } from "@/lib/constants";
 
 export default function CreateAuctionPage() {
-  const { isConnected } = useAccount();
+  const { isConnected, address } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const chainId = useChainId();
   const router = useRouter();
   const [initialized, setInitialized] = useState(isInitialized());
   const [isCreating, setIsCreating] = useState(false);
@@ -50,6 +52,15 @@ export default function CreateAuctionPage() {
     const interval = setInterval(checkInitialization, 1000);
     return () => clearInterval(interval);
   }, [initialized]);
+
+  // Handler for NFT selection
+  const handleNFTSelect = (contractAddress: string, tokenId: string) => {
+    setAuctionForm({
+      ...auctionForm,
+      nftContract: contractAddress,
+      tokenId: tokenId,
+    });
+  };
 
   const handleApproveNFT = async () => {
     if (!isConnected || !auctionForm.nftContract || !walletClient) {
@@ -286,40 +297,77 @@ export default function CreateAuctionPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Left Column - Form Fields */}
               <div className="space-y-6">
+                {/* NFT Selector Section */}
                 <div>
                   <label className="block text-white font-medium mb-2">
-                    NFT Contract Address *
+                    Select Your NFT *
                   </label>
-                  <input
-                    type="text"
-                    placeholder="0x..."
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 backdrop-blur-sm focus:outline-none focus:border-blue-400 transition-colors"
-                    value={auctionForm.nftContract}
-                    onChange={(e) =>
-                      setAuctionForm({
-                        ...auctionForm,
-                        nftContract: e.target.value,
-                      })
-                    }
-                  />
+                  {isConnected && address ? (
+                    <NFTSelector
+                      userAddress={address}
+                      chainId={chainId}
+                      onSelectNFT={handleNFTSelect}
+                      selectedNFT={
+                        auctionForm.nftContract && auctionForm.tokenId
+                          ? {
+                              contractAddress: auctionForm.nftContract,
+                              tokenId: auctionForm.tokenId,
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <div className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white/50 text-center">
+                      Connect your wallet to view your NFTs
+                    </div>
+                  )}
+                  <p className="text-xs text-zinc-400 mt-2">
+                    Select an NFT from your wallet or enter details manually below
+                  </p>
                 </div>
 
-                <div>
-                  <label className="block text-white font-medium mb-2">
-                    Token ID *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="1234"
-                    className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 backdrop-blur-sm focus:outline-none focus:border-blue-400 transition-colors"
-                    value={auctionForm.tokenId}
-                    onChange={(e) =>
-                      setAuctionForm({
-                        ...auctionForm,
-                        tokenId: e.target.value,
-                      })
-                    }
-                  />
+                {/* Manual Entry Option */}
+                <div className="border-t border-white/10 pt-4">
+                  <p className="text-white/60 text-sm mb-3">
+                    Or enter manually:
+                  </p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-white/70 text-sm font-medium mb-2">
+                        NFT Contract Address
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="0x..."
+                        className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 backdrop-blur-sm focus:outline-none focus:border-blue-400 transition-colors"
+                        value={auctionForm.nftContract}
+                        onChange={(e) =>
+                          setAuctionForm({
+                            ...auctionForm,
+                            nftContract: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-white/70 text-sm font-medium mb-2">
+                        Token ID
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="1234"
+                        className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 backdrop-blur-sm focus:outline-none focus:border-blue-400 transition-colors"
+                        value={auctionForm.tokenId}
+                        onChange={(e) =>
+                          setAuctionForm({
+                            ...auctionForm,
+                            tokenId: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div>
