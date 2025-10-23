@@ -6,14 +6,19 @@
     "dev": "ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "db:seed": "tsx src/scripts/seed.ts",
+    "db:migrate": "tsx src/scripts/migrate.ts",
     "deploy": "vercel --prod",
     "vercel-build": "npm run build"
   },
   "dependencies": {
+    "@types/mongoose": "^5.11.97",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "ethers": "6.13.4",
     "express": "^5.1.0",
+    "mongodb": "^6.20.0",
+    "mongoose": "^8.19.2",
     "tslib": "^2.8.1"
   },
   "devDependencies": {
