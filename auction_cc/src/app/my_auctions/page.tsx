@@ -470,7 +470,6 @@ export default function MyAuctionsPage() {
         console.log('[Claim] 🌉🔄 Different chain AND token - Using bridge + swap');
 
         const swapRouter02Address = getSwapRouter02Address(claim.preferredChainId);
-        const winnerTokenAddress = getTokenAddress(claim.currentChainId, claim.currentTokenSymbol);
         const requiredTokenAddress = getTokenAddress(claim.preferredChainId, claim.preferredTokenSymbol);
 
         console.log('[Claim] Bridge + Swap details:', {
@@ -479,7 +478,6 @@ export default function MyAuctionsPage() {
           token: claim.currentTokenSymbol,
           amount: humanReadableAmount,
           swapRouter: swapRouter02Address,
-          tokenIn: winnerTokenAddress,
           tokenOut: requiredTokenAddress,
         });
 
@@ -501,9 +499,11 @@ export default function MyAuctionsPage() {
               chainId: number,
               userAddress: `0x${string}`,
             ) => {
+              const tokenInOnDestination = getTokenAddress(chainId, claim.currentTokenSymbol);
+              
               const swapParams = {
-                tokenIn: winnerTokenAddress,
-                tokenOut: requiredTokenAddress,
+                tokenIn: tokenInOnDestination, // Token address on destination chain after bridge
+                tokenOut: requiredTokenAddress, // Final desired token on destination chain
                 fee: 500, // 0.05% fee tier for stable coin pairs
                 recipient: auction.seller,
                 amountIn: amount,
