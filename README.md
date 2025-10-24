@@ -1,6 +1,6 @@
 # Cross-Chain NFT Auction Platform ⛓️
 
-**Avail Nexus × Alchemy × Chainlink × Uniswap**
+**Avail Nexus × Alchemy × Uniswap**
 
 A decentralized, cross-chain NFT auction platform that enables users to sell NFTs on one blockchain while accepting bids in different tokens from multiple chains. Built with Avail Nexus SDK for seamless cross-chain interoperability, making NFT auctions truly chain-agnostic.
 
