@@ -3,14 +3,13 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "pnpm run ts-node src/index.ts",
-    "build": "pnpm run tsc",
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
     "start": "node dist/index.js",
-    "postinstall": "pnpm run build",
     "tsc": "tsc",
     "ts-node": "ts-node",
-    "db:seed": "pnpm run ts-node src/scripts/seed.ts",
-    "db:migrate": "pnpm run ts-node src/scripts/migrate.ts"
+    "db:seed": "ts-node src/scripts/seed.ts",
+    "db:migrate": "ts-node src/scripts/migrate.ts"
   },
   "dependencies": {
     "@types/mongoose": "^5.11.97",
