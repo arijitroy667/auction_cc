@@ -72,34 +72,6 @@ contracts/src/
 - Transfer NFT to winner on claim
 - Emit events for keeper monitoring
 
-**Key Functions**:
-```solidity
-function createAuction(
-    address nftContract,
-    uint256 tokenId,
-    uint256 startingPrice,    // in USD (6 decimals)
-    uint256 reservePrice,     // minimum acceptable bid
-    uint256 deadline,         // Unix timestamp
-    address preferdToken,     // USDC/USDT address
-    uint8 preferdChain        // destination chain ID
-) external returns (bytes32 intentId)
-
-function settleAuction(
-    bytes32 intentId,
-    address winner,
-    uint256 winningBid
-) external onlyKeeper
-
-function claimNFT(bytes32 intentId) external  // Winner claims
-```
-
-**Events**:
-```solidity
-event AuctionCreated(bytes32 indexed intentId, address indexed seller, ...);
-event AuctionSettled(bytes32 indexed intentId, address indexed winner, uint256 winningBid);
-event NFTTransferred(bytes32 indexed intentId, address indexed winner, uint256 tokenId);
-```
-
 #### 2. BidManager.sol
 **Deployed on**: ALL supported chains (Sepolia, Arbitrum, Optimism, Base)
 
@@ -109,61 +81,6 @@ event NFTTransferred(bytes32 indexed intentId, address indexed winner, uint256 t
 - Release funds to seller or refund bidders post-settlement
 - Support incremental bidding (users can increase bids)
 - Emit bid events for keeper aggregation
-
-**Key Functions**:
-```solidity
-function placeBid(
-    bytes32 intentId,
-    address token,      // USDC/USDT on this chain
-    uint256 amount      // incremental amount (6 decimals)
-) external nonReentrant returns (bool)
-
-function releaseWinningBid(
-    bytes32 intentId,
-    address winner
-) external onlyKeeper
-
-function refundBid(
-    bytes32 intentId,
-    address bidder
-) external onlyKeeper
-```
-
-**Security Features**:
-- ReentrancyGuard for bid placement
-- SafeERC20 for token transfers
-- Keeper-only settlement functions
-- Per-auction, per-user bid tracking
-
-#### 3. AuctionTypes.sol
-**Shared data structures**:
-```solidity
-enum AuctionStatus { Active, Settled, Cancelled }
-
-struct Auction {
-    bytes32 intentId;
-    address seller;
-    address nftContract;
-    uint256 tokenId;
-    uint256 startingPrice;
-    uint256 reservePrice;
-    uint256 deadline;
-    address preferdToken;      // Seller's desired token
-    uint8 preferdChain;        // Seller's desired chain
-    address highestBidder;
-    uint256 highestBid;
-    AuctionStatus status;
-}
-
-struct Bid {
-    bytes32 intentId;
-    address bidder;
-    uint256 amount;
-    address token;
-    uint256 timestamp;
-    bool settled;
-}
-```
 
 ---
 
@@ -219,12 +136,12 @@ await sdk.bridgeAndExecute({
 
 ### Key Nexus Features Used
 
-| Feature | Use Case | Benefit |
-|---------|----------|---------|
-| **Unified Balance** | Show total USDC across all chains | Users see complete liquidity |
-| **Bridge** | Move winning bid to seller's chain | Automatic cross-chain settlement |
-| **BridgeAndExecute** | Bridge + Swap in one transaction | Convert USDT→USDC while bridging |
-| **Multi-Chain Wallet** | Single wallet across all chains | No chain-switching friction |
+| Feature | Use Case | Benefit | Why Used |
+|---------|----------|---------|----------|
+| **Unified Balance** | Show total USDC/USDT across all chains | Users see complete liquidity | |
+| **Transfer** | Direct token transfer to auction chain | User can bid to auction on any chain using his preferred chain | To enable cross-chain bidding |
+| **Bridge** | Move winning bid to seller's chain | Use for cross-chain settlement | When Seller preferdChain != winnerChain but Seller's preferdToken == winnerBidToken |
+| **BridgeAndExecute** | Bridge + Swap in one transaction | Convert USDT→USDC while bridging | When Seller preferdChain != winnerChain and Seller's preferdToken != winnerBidToken |
 
 ---
 
@@ -242,88 +159,12 @@ keeper/src/
 └── config.ts            # Chain configurations
 ```
 
-#### Event Monitoring
-
-```typescript
-// Listens to all chains simultaneously
-async function startEventListeners() {
-    const chains = [
-        { id: 11155111, name: 'Sepolia', rpc: SEPOLIA_RPC },
-        { id: 421614, name: 'Arbitrum Sepolia', rpc: ARB_SEPOLIA_RPC },
-        { id: 84532, name: 'Base Sepolia', rpc: BASE_SEPOLIA_RPC },
-        { id: 11155420, name: 'Optimism Sepolia', rpc: OP_SEPOLIA_RPC }
-    ];
-
-    for (const chain of chains) {
-        // Monitor AuctionHub events
-        await monitorAuctionHub(chain);
-        
-        // Monitor BidManager events
-        await monitorBidManager(chain);
-    }
-}
-```
-
 **Events Monitored**:
 - `AuctionCreated` → Store auction metadata
 - `BidPlaced` → Aggregate bids from all chains
 - `AuctionSettled` → Track settlement status
 
-#### Auction Processing Logic
-
-```typescript
-async function processEndedAuctions() {
-    const auctions = await getAllActiveAuctions();
-    const now = Math.floor(Date.now() / 1000);
-
-    for (const auction of auctions) {
-        if (auction.deadline < now && auction.status === 'Active') {
-            // 1. Get all bids across all chains
-            const allBids = await aggregateBidsAcrossChains(auction.intentId);
-
-            // 2. Normalize to USD (handle USDC/USDT)
-            const normalizedBids = normalizeBidsToUSD(allBids);
-
-            // 3. Find highest bid ≥ reserve price
-            const winner = findHighestBidAboveReserve(
-                normalizedBids,
-                auction.reservePrice
-            );
-
-            if (winner) {
-                // 4. Settle auction on-chain
-                await auctionHubContract.settleAuction(
-                    auction.intentId,
-                    winner.bidder,
-                    winner.amount
-                );
-            } else {
-                // No valid bids - return NFT to seller
-                await auctionHubContract.cancelAuction(auction.intentId);
-            }
-        }
-    }
-}
-```
-
-**Keeper Security**:
-- Read-only for most operations (event monitoring)
-- Write operations limited to settlement/refunds
-- Multi-signature support (future enhancement)
-- Operates from secure environment with private key HSM
-
 ---
-
-## Frontend Application (Next.js)
-
-### Technology Stack
-
-- **Framework**: Next.js 15 (App Router)
-- **Styling**: Tailwind CSS 4.0
-- **Web3**: Wagmi 2.x, RainbowKit, Ethers.js 6.x
-- **Cross-Chain**: Avail Nexus SDK
-- **Notifications**: Blockscout App SDK
-- **State Management**: React Hooks
 
 ### Pages & Features
 
@@ -333,85 +174,52 @@ async function processEndedAuctions() {
 - Quick navigation to create/browse auctions
 - Real-time Nexus initialization status
 
-```tsx
-// Unified balance across all chains
-const balances = await sdk.getUnifiedBalances();
-
-// Display example:
-// USDC: 500.00 (Sepolia: 200, Arbitrum: 150, Base: 150)
-// USDT: 300.00 (Optimism: 200, Base: 100)
-```
-
 #### 2. Create Auction (`/create`)
 **Innovative Features**:
-- 🖼️ **Visual NFT Selector**: Browse and select NFTs with images (powered by Alchemy NFT API)
-- 🔄 **Auto-fill**: Click NFT → Contract address & token ID populated automatically
-- 🌐 **Chain-Agnostic**: Create auction on any connected chain
-- ⏱️ **Flexible Duration**: From 2 minutes to 7 days
-- 💰 **Token Preference**: Choose USDC or USDT for settlement
-- 🎯 **Chain Preference**: Specify destination chain for payment
-
-**NFT Selector Implementation**:
-```typescript
-// Fetches user's NFTs via Alchemy API
-const nfts = await fetchUserNFTsFromAlchemy(userAddress, chainId, API_KEY);
-
-// Displays gallery with:
-// - NFT images (IPFS → HTTPS conversion)
-// - Collection names
-// - Token IDs
-// - Click-to-select UX
-```
-
-**Setup**:
-```bash
-# Get Alchemy API key
-1. Sign up at https://www.alchemy.com
-2. Create app for each network
-3. Add to .env.local:
-   NEXT_PUBLIC_ALCHEMY_API_KEY=your_key_here
-```
+-  **Visual NFT Selector**: Browse and select NFTs with images (powered by Alchemy NFT API)
+-  **Auto-fill**: Click NFT → Contract address & token ID populated automatically
+-  **Chain-Agnostic**: Create auction on any connected chain
+-  **Flexible Duration**: From 2 minutes to 7 days
+-  **Token Preference**: Choose USDC or USDT for settlement
+-  **Chain Preference**: Specify destination chain for payment
 
 #### 3. Browse Auctions (`/auctions`)
 - **Live Auction Feed**: All active auctions across all chains
 - **Real-Time Bidding**: Place bids from any chain
-- **Bid History Modal**: See all bids with chain/token info
-- **Countdown Timers**: Live deadline tracking
-- **Cross-Chain Bid Placement**: Uses Nexus SDK for automatic bridging
+- **Cross-Chain Bid Placement**: Uses Nexus SDK for automatic transfers
+- **My Bids Section**: Track all your bids and statuses
 
 **Bid Flow**:
 ```typescript
 // User on Optimism bidding on Arbitrum auction
 1. User enters bid amount (e.g., 110 USDC)
-2. Frontend calculates required bridge:
+2. Frontend calculates required transfer:
    - From: Optimism (user's chain)
    - To: Arbitrum (auction chain)
    - Amount: 110 USDC
 
-3. Nexus SDK bridges funds:
-   await sdk.bridge({
-       token: 'USDC',
-       amount: '110000000',
-       toChainId: 421614, // Arbitrum
-       sourceChains: [11155420] // Optimism
-   });
+3. Nexus SDK transfer funds:
+   export const result = async (token: string, amount: number, chainId: number,recipient: string,sourceChain?: number[]): Promise<TransferResult> => {
+    return await sdk.transfer({
+        token: token,// 'USDC' or 'USDT'
+        amount: amount,
+        chainId: chainId,// Destination chain (auction chain), Here Arbitrum
+        recipient: recipient,
+        sourceChains: sourceChain,
+    } as TransferParams);
+}
 
-4. On success, call BidManager.placeBid() on Arbitrum
+4. On success, call BidManager.placeBid() on Arbitrum deployment
 5. Bid locked, event emitted for keeper
 ```
 
 #### 4. My Auctions (`/my_auctions`)
-**For Sellers**:
+
 - View all created auctions
 - See current highest bid
 - Cancel auctions (before bids placed)
 - **Claim Winning Bid**: Automatic bridge to preferred chain/token
 
-**For Bidders**:
-- View participated auctions
-- Track bid status (winning/losing)
-- **Claim NFT**: If won
-- **Get Refund**: If lost (automatic via keeper)
 
 **Advanced Claim Logic**:
 ```typescript
@@ -421,13 +229,14 @@ Case 1: Same chain, same token
 → Direct transfer from BidManager to seller
 
 Case 2: Same chain, different token
-→ Use Uniswap V3 swap on that chain
+→ Use Uniswap V3 swap on that chain(testnet)
+-> Will use nexusSDK.swap for mainnet(code commented for testnet)
 
 Case 3: Different chain, same token
 → Use Nexus bridge
 
 Case 4: Different chain, different token
-→ Use Nexus bridgeAndExecute (bridge + swap atomically)
+→ Use Nexus bridgeAndExecute (bridge + swap atomically) using Uniswap V3
 ```
 
 ---
@@ -442,173 +251,6 @@ Case 4: Different chain, different token
 | **Arbitrum Sepolia** | 421614 | ✅ | ✅ | USDC, USDT |
 | **Base Sepolia** | 84532 | ✅ | ✅ | USDC, USDT |
 | **Optimism Sepolia** | 11155420 | ✅ | ✅ | USDC, USDT |
-
-### Mainnet Readiness
-
-All components are production-ready. For mainnet deployment:
-- Replace testnet RPC URLs
-- Update token addresses to mainnet contracts
-- Configure mainnet Nexus SDK
-- Deploy contracts to mainnets
-- Update Uniswap router addresses (or use Nexus Swap)
-
----
-
-## Project Structure
-
-```
-cross-chain-auction/
-├── auction_cc/                    # Frontend (Next.js)
-│   ├── src/
-│   │   ├── app/                   # Pages
-│   │   │   ├── page.tsx           # Home (unified balance)
-│   │   │   ├── create/page.tsx    # Create auction
-│   │   │   ├── auctions/page.tsx  # Browse auctions
-│   │   │   └── my_auctions/page.tsx # User dashboard
-│   │   ├── components/
-│   │   │   ├── navbar.tsx         # Navigation
-│   │   │   ├── NFTSelector.tsx    # Visual NFT picker
-│   │   │   ├── BidComponent.tsx   # Bidding interface
-│   │   │   ├── LiveBid.tsx        # Real-time bid display
-│   │   │   └── providers.tsx      # Wagmi/RainbowKit setup
-│   │   ├── lib/
-│   │   │   ├── nexus/
-│   │   │   │   └── nexusClient.ts # Nexus SDK wrapper
-│   │   │   ├── auctionHub.ts      # Contract interactions
-│   │   │   ├── fetchUserNFTs.ts   # Alchemy NFT API
-│   │   │   ├── claimDetection.ts  # Settlement logic
-│   │   │   └── constants.ts       # Chain/token configs
-│   │   └── abis/                  # Contract ABIs
-│   ├── keeper/                    # Backend service
-│   │   ├── src/
-│   │   │   ├── index.ts           # Express server
-│   │   │   ├── event-listener.ts  # Multi-chain events
-│   │   │   ├── auction-processor.ts # Settlement
-│   │   │   └── config.ts          # Keeper config
-│   │   └── package.json
-│   └── .env.local                 # API keys
-│
-└── contracts/                     # Smart contracts (Foundry)
-    ├── src/
-    │   ├── AuctionHub.sol         # Main auction logic
-    │   ├── BidManager.sol         # Bid management
-    │   ├── AuctionTypes.sol       # Data structures
-    │   └── Interfaces/
-    │       └── IAuctionHub.sol    # Contract interfaces
-    ├── test/                      # Solidity tests
-    ├── script/                    # Deployment scripts
-    └── foundry.toml               # Foundry config
-```
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+ and pnpm
-- Foundry (for smart contracts)
-- MetaMask or compatible Web3 wallet
-- Alchemy API key (free tier: https://www.alchemy.com)
-
-### 1. Clone Repository
-
-```bash
-git clone https://github.com/yourusername/cross-chain-auction.git
-cd cross-chain-auction
-```
-
-### 2. Smart Contract Deployment
-
-```bash
-cd contracts
-
-# Install dependencies
-forge install
-
-# Compile contracts
-forge build
-
-# Run tests
-forge test
-
-# Deploy to testnets
-forge create --rpc-url $SEPOLIA_RPC_URL \
-  --private-key $PRIVATE_KEY \
-  src/AuctionHub.sol:AuctionHub
-
-forge create --rpc-url $ARBITRUM_SEPOLIA_RPC_URL \
-  --private-key $PRIVATE_KEY \
-  src/BidManager.sol:BidManager
-
-# Repeat for Base and Optimism Sepolia
-```
-
-### 3. Backend Keeper Setup
-
-```bash
-cd auction_cc/keeper
-
-# Install dependencies
-pnpm install
-
-# Configure environment
-cp .env.example .env
-# Add your RPC URLs and keeper private key
-
-# Start keeper
-pnpm start
-
-# Or use pm2 for production
-pm2 start src/index.ts --name auction-keeper
-```
-
-**Keeper Environment Variables**:
-```env
-KEEPER_PRIVATE_KEY=your_keeper_private_key
-SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
-ARBITRUM_SEPOLIA_RPC_URL=https://arb-sepolia.g.alchemy.com/v2/YOUR_KEY
-BASE_SEPOLIA_RPC_URL=https://base-sepolia.g.alchemy.com/v2/YOUR_KEY
-OPTIMISM_SEPOLIA_RPC_URL=https://opt-sepolia.g.alchemy.com/v2/YOUR_KEY
-```
-
-### 4. Frontend Setup
-
-```bash
-cd auction_cc
-
-# Install dependencies
-pnpm install
-
-# Configure environment
-cp .env.local.example .env.local
-```
-
-**Frontend Environment Variables**:
-```env
-# NFT API (for visual NFT selector)
-NEXT_PUBLIC_ALCHEMY_API_KEY=your_alchemy_api_key
-
-# Optional: For backend keeper integration
-KEEPER_PRIVATE_KEY=your_keeper_private_key
-SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
-ARBITRUM_SEPOLIA_RPC_URL=https://arb-sepolia.g.alchemy.com/v2/YOUR_KEY
-BASE_SEPOLIA_RPC_URL=https://base-sepolia.g.alchemy.com/v2/YOUR_KEY
-OPTIMISM_SEPOLIA_RPC_URL=https://opt-sepolia.g.alchemy.com/v2/YOUR_KEY
-```
-
-### 5. Run Application
-
-```bash
-# Development mode
-pnpm dev
-
-# Production build
-pnpm build
-pnpm start
-
-# Access at http://localhost:3000
-```
 
 ---
 
@@ -704,136 +346,6 @@ pnpm start
 
 ---
 
-## Security Considerations
-
-### Smart Contracts
-- ✅ ReentrancyGuard on all fund transfers
-- ✅ SafeERC20 for token operations
-- ✅ Keeper-only settlement functions
-- ✅ NFT ownership verification before auction creation
-- ✅ Approval checks before NFT transfers
-- ✅ Reserve price enforcement
-
-### Keeper
-- ✅ Private key stored in secure environment (HSM recommended)
-- ✅ Read-only operations for monitoring
-- ✅ Write operations limited to post-auction settlement
-- ✅ Event-driven architecture (no speculative execution)
-- ✅ Multi-signature support (future enhancement)
-
-### Frontend
-- ✅ Client-side transaction signing only
-- ✅ No private keys in browser storage
-- ✅ RainbowKit secure wallet connections
-- ✅ Nexus SDK handles all cross-chain security
-- ✅ Real-time transaction status notifications
-
-### Audits
-- [ ] Smart contract audit (pending)
-- [ ] Keeper service security review (pending)
-- [ ] Nexus SDK vetted by Avail team (✅)
-
----
-
-## Future Enhancements
-
-### Phase 1 (MVP - Current)
-- ✅ Cross-chain auctions on 4 testnets
-- ✅ USDC/USDT support
-- ✅ Visual NFT selector
-- ✅ Nexus SDK integration
-- ✅ Keeper backend
-
-### Phase 2 (Mainnet Launch)
-- [ ] Deploy to mainnets (Ethereum, Arbitrum, Base, Optimism, Polygon)
-- [ ] Add more EVM chains (Avalanche, BNB Chain, Fantom)
-- [ ] Support more stablecoins (DAI, FRAX, USDbC)
-- [ ] Native token support (ETH, MATIC, AVAX)
-- [ ] Replace Uniswap with Nexus Swap (when available on mainnet)
-
-### Phase 3 (Advanced Features)
-- [ ] Dutch auctions (descending price)
-- [ ] Reserve price reveals after auction
-- [ ] Batch auctions (multiple NFTs at once)
-- [ ] Proxy bidding (max bid concealment)
-- [ ] Auction extensions (last-minute bid handling)
-
-### Phase 4 (Governance & DAO)
-- [ ] Platform governance token
-- [ ] Fee structure voting
-- [ ] Keeper network (multiple keepers)
-- [ ] Dispute resolution mechanism
-- [ ] Treasury management
-
-### Phase 5 (Ecosystem Expansion)
-- [ ] NFT fractionalization support
-- [ ] Loan-backed bidding (NFT collateral)
-- [ ] Cross-chain royalties
-- [ ] Integration with major NFT marketplaces
-- [ ] Mobile app (React Native)
-
----
-
-## Performance Metrics
-
-### Gas Optimization
-| Operation | Gas Cost (Sepolia) | Equivalent USD (@$2000 ETH, 50 gwei) |
-|-----------|-------------------|---------------------------------------|
-| Create Auction | ~180,000 gas | ~$0.018 |
-| Place Bid | ~120,000 gas | ~$0.012 |
-| Settle Auction | ~90,000 gas | ~$0.009 |
-| Claim NFT | ~80,000 gas | ~$0.008 |
-| Refund Bid | ~60,000 gas | ~$0.006 |
-
-### Nexus Bridge Costs
-- Cross-chain bid: ~$0.50 (Nexus network fees)
-- Bridge + Swap: ~$0.80 (Nexus + Uniswap fees)
-- Significantly cheaper than manual bridging + swapping
-
-### Keeper Performance
-- Event detection latency: <30 seconds
-- Settlement processing: <5 minutes after auction end
-- Supports 1000+ concurrent auctions
-
----
-
-## Contributing
-
-We welcome contributions! Here's how:
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Commit changes**: `git commit -m 'Add amazing feature'`
-4. **Push to branch**: `git push origin feature/amazing-feature`
-5. **Open a Pull Request**
-
-### Development Guidelines
-- Write tests for new contracts (Foundry)
-- Update documentation for new features
-- Follow existing code style (Prettier/ESLint)
-- Add comments for complex logic
-
----
-
-## Acknowledgments
-
-### Technologies & Partners
-- **Avail Project**: Nexus SDK for cross-chain interoperability
-- **Alchemy**: NFT API for visual NFT selector
-- **Chainlink**: Future integration for price feeds and automation
-- **Uniswap**: V3 DEX integration for token swaps
-- **OpenZeppelin**: Battle-tested smart contract libraries
-- **RainbowKit**: Beautiful Web3 wallet connection UI
-- **Wagmi**: React hooks for Ethereum
-
-### Inspiration
-- Autonome's payment-gated content access (HTTP 402)
-- ENS for decentralized identity
-- Intent-based architectures (CoW Protocol, 1inch Fusion)
-- Cross-chain NFT bridges (LayerZero, Wormhole)
-
----
-
 ## License
 
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
@@ -847,27 +359,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 - **Live Demo**: [https://cross-chain-auction.vercel.app](https://cross-chain-auction.vercel.app)
 - **Twitter**: [@YourProject](https://twitter.com/yourproject)
 - **Discord**: [Join Community](https://discord.gg/yourproject)
-
----
-
-## Hackathon Submission
-
-### Built With
-- Avail Nexus SDK (Primary)
-- Alchemy NFT API
-- Chainlink (Future integration)
-- Uniswap V3
-
-### Team
-- [Your Name] - Smart Contracts & Backend
-- [Team Member 2] - Frontend & UX
-- [Team Member 3] - Keeper & Infrastructure
-
-### Tracks
-- 🏆 Cross-Chain DeFi
-- 🎨 NFT Infrastructure
-- 🔗 Avail Nexus Integration
-- 💡 Best UX Innovation
 
 ---
 

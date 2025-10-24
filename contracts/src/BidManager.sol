@@ -52,28 +52,22 @@ contract BidManager is ReentrancyGuard {
      * @param amount The INCREMENTAL bid amount (must match what was transferred)
      *               For new bids: full amount
      *               For existing bids: only the additional amount being added
-     * @param sourceChain The chain ID where this bid is being placed
      */
     function placeBid(
         bytes32 intentId,
         address token,
-        uint256 amount,
-        uint8 sourceChain
+        uint256 amount
     ) external nonReentrant returns (bool) {
         require(token != address(0), "Invalid token address");
         require(amount > 0, "Amount must be greater than 0");
-        require(sourceChain > 0, "Invalid source chain");
 
         AuctionTypes.Bid storage bid = lockedBids[intentId][msg.sender];
 
         if (bid.amount > 0) {
-            // Existing bid - enforce same chain restriction
-            require(bid.sourceChain == sourceChain, "Must bid from the same chain as your initial bid");
             require(bid.token == token, "Token mismatch for existing bid");
             bid.amount += amount; 
             bid.timestamp = block.timestamp;
         } else {
-            // New bid
             auctionBidders[intentId].push(msg.sender);
             bid.intentId = intentId;
             bid.bidder = msg.sender;
@@ -81,7 +75,6 @@ contract BidManager is ReentrancyGuard {
             bid.token = token;
             bid.timestamp = block.timestamp;
             bid.settled = false;
-            bid.sourceChain = sourceChain;
         }
 
         emit BidPlaced(intentId, msg.sender, token, amount, block.timestamp);

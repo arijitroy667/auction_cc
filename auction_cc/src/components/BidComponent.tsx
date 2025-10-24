@@ -9,10 +9,9 @@ import { resultForToken } from './unified_balance/fetch-unified-balance';
 import { TOKEN_ADDRESSES, SUPPORTED_TOKENS, CHAIN_NAMES, BID_MANAGER_ADDRESS, type SupportedToken } from '@/lib/constants';
 import BidManagerABI from '@/abis/BidManager.json';
 
-// Backend API URL
+
 const KEEPER_API_URL = process.env.NEXT_PUBLIC_KEEPER_API_URL || 'http://localhost:3001';
 
-// Map chain names from backend to chain IDs
 const CHAIN_NAME_TO_ID: { [key: string]: number } = {
   'ethereum': 11155111,
   'arbitrumSepolia': 421614,
@@ -47,7 +46,6 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
   const supportedChains = Object.keys(CHAIN_NAMES).map(Number);
 
-  // Fetch highest bid for this auction (aggregated by user)
   useEffect(() => {
     const fetchHighestBid = async () => {
       setBidsLoading(true);
@@ -56,7 +54,6 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.data && data.data.length > 0) {
-            // Aggregate bids by bidder address first
             const bidderMap = new Map<string, number>();
             
             data.data.forEach((bid: any) => {
@@ -66,7 +63,6 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
               bidderMap.set(bidderKey, existing + amount);
             });
             
-            // Find the highest aggregated bid
             const maxBid = Math.max(...Array.from(bidderMap.values()));
             setHighestBid(maxBid);
           } else {
@@ -84,14 +80,11 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
     fetchHighestBid();
   }, [auctionId]);
 
-  // Fetch user's existing bids from the backend (aggregated across all chains)
   useEffect(() => {
     const fetchExistingBid = async () => {
       if (!isConnected || !address) return;
 
       try {
-        
-        // Fetch all bids for this auction from the backend
         const response = await fetch(`${KEEPER_API_URL}/api/bids/${auctionId}`);
         
         if (!response.ok) {
@@ -109,7 +102,6 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
           return;
         }
 
-        // Find all bids from the current user (could be from multiple chains)
         const userBids = data.data.filter(
           (bid: any) => bid.bidder.toLowerCase() === address.toLowerCase()
         );
@@ -121,24 +113,19 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
           return;
         }
 
-        // Find the FIRST bid (earliest timestamp) to determine the locked chain
         const firstBid = userBids.reduce((earliest: any, current: any) => {
           const earliestTime = new Date(earliest.timestamp).getTime();
           const currentTime = new Date(current.timestamp).getTime();
           return currentTime < earliestTime ? current : earliest;
         }, userBids[0]);
 
-        // Get the chain ID from the first bid's source chain
         const firstBidChainId = CHAIN_NAME_TO_ID[firstBid.sourceChain];
         
-        // Calculate total bid amount across all chains for this user
         const totalBidAmount = userBids.reduce((total: number, bid: any) => {
-          // Bid amounts are stored with 6 decimals (USDC/USDT)
           const amount = parseFloat(ethers.formatUnits(bid.amount, 6));
           return total + amount;
         }, 0);
 
-        // Get the token from the first bid (assuming user uses same token)
         const firstBidToken = userBids[0].token;
 
         setExistingBid(totalBidAmount);
@@ -156,7 +143,6 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
     fetchExistingBid();
   }, [auctionId, isConnected, address]);
 
-  // Set selected chain to user's first bid chain if they have an existing bid
   useEffect(() => {
     if (existingBidChain !== null) {
       setSelectedChain(existingBidChain);
@@ -204,9 +190,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
       return;
     }
 
-    // Check if user is increasing an existing bid (aggregated across all chains)
     if (existingBid > 0) {
-      // Validate that user is bidding from the same chain as their first bid
       if (existingBidChain !== null && selectedChain !== existingBidChain) {
         toast.error(`You can only bid from ${CHAIN_NAMES[existingBidChain as keyof typeof CHAIN_NAMES]}, the chain where you placed your first bid.`);
         return;
@@ -220,13 +204,10 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
     }
 
-    // Parse starting and reserve prices (stored as 6 decimals for USDC/USDT)
     const startingPriceNum = parseFloat(ethers.formatUnits(startingPrice, 6));
     const reservePriceNum = parseFloat(ethers.formatUnits(reservePrice, 6));
 
-    // Validation logic for English auction (bids increase over time)
     if (highestBid === 0) {
-      // First bidder: must bid at least the reserve price, up to starting price
       if (newTotalBidAmount < reservePriceNum) {
         toast.error(`First bid must be at least $${reservePriceNum.toFixed(2)} (reserve price)`);
         return;
@@ -236,8 +217,6 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
         return;
       }
     } else {
-      // Subsequent bidders: must bid HIGHER than the current highest bid
-      // and cannot exceed the starting price (maximum)
       if (newTotalBidAmount <= highestBid) {
         toast.error(`Your bid must be higher than the current highest bid of $${highestBid.toFixed(2)}`);
         return;
@@ -247,9 +226,6 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
         return;
       }
     }
-
-    // Calculate the incremental amount needed
-    // Round to 6 decimals to avoid floating-point precision issues
     const rawIncrementalAmount = existingBid > 0 ? newTotalBidAmount - existingBid : newTotalBidAmount;
     const incrementalAmount = Math.round(rawIncrementalAmount * 1e6) / 1e6;
 
@@ -260,8 +236,6 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
     try {
       setLoading(true);
-
-      // Get the token address early for verification
       const tokenAddress = TOKEN_ADDRESSES[selectedChain as keyof typeof TOKEN_ADDRESSES][selectedToken];
       if (!tokenAddress) {
         throw new Error(`Token address not found for ${selectedToken} on chain ${selectedChain}`);

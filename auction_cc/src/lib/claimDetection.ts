@@ -75,37 +75,28 @@ const TOKEN_SYMBOL_MAP: { [chainId: number]: { [address: string]: string } } = {
     },
 };
 
-/**
- * Parse chain identifier (can be uint8, string number, or string name) to chain ID
- */
+
 function getChainId(chainIdentifier: string | number): number {
-    // If it's already a valid chain ID, return it
     if (typeof chainIdentifier === 'number') {
-        // Check if it's a chain enum (0-3)
         if (chainIdentifier >= 0 && chainIdentifier <= 3) {
             return CHAIN_ENUM_TO_ID[chainIdentifier] || 0;
         }
-        // Check if it's already a chain ID
         if (CHAIN_NAME_MAP[chainIdentifier]) {
             return chainIdentifier;
         }
         return 0;
     }
     
-    // Try parsing as number first
     const numericValue = parseInt(chainIdentifier);
     if (!isNaN(numericValue)) {
-        // Check if it's a chain enum (0-3)
         if (numericValue >= 0 && numericValue <= 3) {
             return CHAIN_ENUM_TO_ID[numericValue] || 0;
         }
-        // Check if it's already a chain ID
         if (CHAIN_NAME_MAP[numericValue]) {
             return numericValue;
         }
     }
     
-    // Try as string identifier
     return CHAIN_STRING_TO_ID[chainIdentifier] || 0;
 }
 
@@ -130,8 +121,8 @@ interface Auction {
     intentId: string;
     seller: string;
     preferdToken: string;
-    preferdChain: string | number; // Can be chain enum (0-3), chain ID, or string
-    sourceChain: string | number;   // Can be chain enum (0-3), chain ID, or string
+    preferdChain: string | number; 
+    sourceChain: string | number;   
     status: number;
 }
 
@@ -140,7 +131,7 @@ interface Bid {
     bidder: string;
     amount: string;
     token: string;
-    sourceChain: string | number; // Can be chain enum (0-3), chain ID, or string
+    sourceChain: string | number; 
     timestamp?: string;
 }
 
@@ -153,16 +144,12 @@ export function detectPendingClaim(
     bids: Bid[],
     sellerAddress: string
 ): PendingClaim | null {
-    // Only check settled auctions (status 3 according to AuctionStatus enum)
     if (auction.status !== 3) return null;
     
-    // Skip if claim has already been completed
     if (isClaimCompleted(auction.intentId)) return null;
     
-    // Only for the actual seller
     if (auction.seller.toLowerCase() !== sellerAddress.toLowerCase()) return null;
     
-    // Aggregate bids by bidder (same as in UI logic)
     if (!bids || bids.length === 0) return null;
     
     const bidderMap = new Map<string, { 
@@ -173,14 +160,12 @@ export function detectPendingClaim(
         timestamp: string;
     }>();
     
-    // Aggregate all bids by bidder
     for (const bid of bids) {
         const bidderKey = bid.bidder.toLowerCase();
         const existing = bidderMap.get(bidderKey);
         
         if (existing) {
             existing.amount += BigInt(bid.amount);
-            // Keep the most recent timestamp and sourceChain
             if (!bid.timestamp || (existing.timestamp && bid.timestamp > existing.timestamp)) {
                 existing.timestamp = bid.timestamp || existing.timestamp;
                 existing.sourceChain = bid.sourceChain;
@@ -196,7 +181,6 @@ export function detectPendingClaim(
         }
     }
     
-    // Find winner (highest aggregated amount)
     const aggregatedBids = Array.from(bidderMap.values());
     let winnerBid = aggregatedBids[0];
     let highestAmount = aggregatedBids[0].amount;
@@ -208,7 +192,6 @@ export function detectPendingClaim(
         }
     }
     
-    // Determine current location (where funds were released = winner's chain)
     const currentChainId = getChainId(winnerBid.sourceChain);
     const currentChainName = getChainName(currentChainId);
     const currentToken = winnerBid.token;
