@@ -1,4 +1,4 @@
-# Cross-Chain NFT Auction Platform ⛓️
+# X-Bid: Cross-Chain NFT Auction Platform ⛓️
 
 **Avail Nexus × Alchemy × Uniswap**
 
