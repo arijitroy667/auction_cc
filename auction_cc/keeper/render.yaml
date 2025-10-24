@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: auction-keeper
+    env: node
+    plan: free
+    buildCommand: |
+      cd auction_cc/keeper
+      corepack enable
+      corepack prepare pnpm@8.15.0 --activate
+      pnpm install --frozen-lockfile
+      pnpm run build
+    startCommand: |
+      cd auction_cc/keeper
+      pnpm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: true
+      - key: COREPACK_ENABLE_STRICT
+        value: "0"
+    autoDeploy: true
+    disk:
+      name: auction-keeper-disk
+      mountPath: /tmp
+      sizeGB: 1
