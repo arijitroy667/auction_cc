@@ -3,9 +3,11 @@ services:
     name: auction-keeper
     env: node
     plan: free
-    buildCommand: npm run build
-    startCommand: npm start
+    buildCommand: cd auction_cc/keeper && pnpm install && pnpm run build
+    startCommand: cd auction_cc/keeper && pnpm start
     healthCheckPath: /health
+    repo: https://github.com/your-username/your-repo-name.git
+    rootDir: auction_cc/keeper
     envVars:
       - key: NODE_ENV
         value: production
