@@ -12,6 +12,9 @@
     "db:migrate": "ts-node src/scripts/migrate.ts"
   },
   "dependencies": {
+     "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^20.8.9",
     "@types/mongoose": "^5.11.97",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -23,6 +26,7 @@
     "typescript": "^5.2.2",
     "ts-node": "^10.9.2"
   },
+  
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
