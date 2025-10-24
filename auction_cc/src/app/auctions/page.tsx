@@ -32,7 +32,9 @@ interface KeeperAuctionsResponse {
   timestamp: string;
 }
 
-const KEEPER_API_URL = 'http://localhost:3001';
+// Backend Keeper API URL
+const KEEPER_API_URL = process.env.NEXT_PUBLIC_KEEPER_API_URL || 'http://localhost:3001';
+
 const CHAIN_NAMES: { [key: string]: string } = {
   'ethereum': 'Ethereum Sepolia',
   'arbitrumSepolia': 'Arbitrum Sepolia',

@@ -9,6 +9,9 @@ import { resultForToken } from './unified_balance/fetch-unified-balance';
 import { TOKEN_ADDRESSES, SUPPORTED_TOKENS, CHAIN_NAMES, BID_MANAGER_ADDRESS, type SupportedToken } from '@/lib/constants';
 import BidManagerABI from '@/abis/BidManager.json';
 
+// Backend API URL
+const KEEPER_API_URL = process.env.NEXT_PUBLIC_KEEPER_API_URL || 'http://localhost:3001';
+
 // Map chain names from backend to chain IDs
 const CHAIN_NAME_TO_ID: { [key: string]: number } = {
   'ethereum': 11155111,
@@ -49,7 +52,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
     const fetchHighestBid = async () => {
       setBidsLoading(true);
       try {
-        const response = await fetch(`http://localhost:3001/api/bids/${auctionId}`);
+        const response = await fetch(`${KEEPER_API_URL}/api/bids/${auctionId}`);
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.data && data.data.length > 0) {
@@ -89,7 +92,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
       try {
         
         // Fetch all bids for this auction from the backend
-        const response = await fetch(`http://localhost:3001/api/bids/${auctionId}`);
+        const response = await fetch(`${KEEPER_API_URL}/api/bids/${auctionId}`);
         
         if (!response.ok) {
           console.warn('Failed to fetch bids from backend');

@@ -19,11 +19,14 @@ import type { BridgeAndExecuteParams, BridgeAndExecuteResult } from '@avail-proj
 
 // Uniswap SwapRouter02 addresses for each chain
 const UNISWAP_SWAP_ROUTER02_ADDRESSES: { [chainId: number]: string } = {
-    11155111: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Ethereum Sepolia
-    421614: "0x101F443B4d1b059569D643917553c771E1b9663E", // Arbitrum Sepolia
-    84532: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4", // Base Sepolia
-    11155420: "0x1C232F01118CB8B424793ae03F870aa7D0ac7f77", // Optimism Sepolia
+  11155111: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Ethereum Sepolia
+  421614: "0x101F443B4d1b059569D643917553c771E1b9663E",   // Arbitrum Sepolia
+  84532: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4",    // Base Sepolia
+  11155420: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4",  // Optimism Sepolia
 };
+
+// Backend Keeper API URL
+const KEEPER_API_URL = process.env.NEXT_PUBLIC_KEEPER_API_URL || "http://localhost:3001";
 
 // SwapRouter02 ABI for exactInputSingle function
 const SWAP_ROUTER02_ABI = [
@@ -112,7 +115,6 @@ interface KeeperBidsResponse {
   timestamp: string;
 }
 
-const KEEPER_API_URL = "http://localhost:3001";
 const CHAIN_NAMES: { [key: string]: string } = {
   ethereum: "Ethereum Sepolia",
   arbitrumSepolia: "Arbitrum Sepolia",
