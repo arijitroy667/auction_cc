@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: auction-keeper
+    env: node
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: true
+    autoDeploy: true
+    disk:
+      name: auction-keeper-disk
+      mountPath: /tmp
+      sizeGB: 1
