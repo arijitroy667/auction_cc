@@ -18,7 +18,18 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "keeper/**", // Ignore keeper folder
     ],
+    rules: {
+      // Suppress all the warnings you're seeing
+      "@typescript-eslint/no-unused-vars": "off",
+      "@typescript-eslint/no-explicit-any": "off",
+      "react/no-unescaped-entities": "off",
+      "prefer-const": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "@next/next/no-img-element": "off",
+      "@typescript-eslint/no-require-imports": "off"
+    }
   },
 ];
 

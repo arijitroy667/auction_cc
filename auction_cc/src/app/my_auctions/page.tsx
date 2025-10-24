@@ -3,73 +3,85 @@
 import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
 import { isInitialized } from "@/lib/nexus/nexusClient";
-import { useNotification } from '@blockscout/app-sdk';
+import { useNotification } from "@blockscout/app-sdk";
 import Navbar from "@/components/navbar";
 import Link from "next/link";
 import { ethers } from "ethers";
 import { getAuctionHubContract } from "@/lib/auctionHub";
 import { detectPendingClaim, markClaimAsCompleted } from "@/lib/claimDetection";
-import { result as bridgeTokens } from '@/components/bridge/bridge';
+import { result as bridgeTokens } from "@/components/bridge/bridge";
 import { sdk } from "@/lib/nexus/nexusClient";
-import { toast, Toaster } from 'react-hot-toast';
+import { toast, Toaster } from "react-hot-toast";
 import { TOKEN_ADDRESSES } from "@/lib/constants";
-import type { BridgeAndExecuteParams, BridgeAndExecuteResult } from '@avail-project/nexus-core';
+import type {
+  BridgeAndExecuteParams,
+  BridgeAndExecuteResult,
+} from "@avail-project/nexus-core";
 // Import Nexus swap for mainnet deployment
 // import { swapTokens } from '@/components/swap/swap';
 
 // Uniswap SwapRouter02 addresses for each chain
 const UNISWAP_SWAP_ROUTER02_ADDRESSES: { [chainId: number]: string } = {
-    11155111: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Ethereum Sepolia
-    421614: "0x101F443B4d1b059569D643917553c771E1b9663E", // Arbitrum Sepolia
-    84532: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4", // Base Sepolia
-    11155420: "0x1C232F01118CB8B424793ae03F870aa7D0ac7f77", // Optimism Sepolia
+  11155111: "0x3bFA4769FB09eefC5a80d6E87c3B9C650f7Ae48E", // Ethereum Sepolia
+  421614: "0x101F443B4d1b059569D643917553c771E1b9663E", // Arbitrum Sepolia
+  84532: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4", // Base Sepolia
+  11155420: "0x1C232F01118CB8B424793ae03F870aa7D0ac7f77", // Optimism Sepolia
 };
 
 // SwapRouter02 ABI for exactInputSingle function
 const SWAP_ROUTER02_ABI = [
-    {
-        inputs: [
-            {
-                components: [
-                    { internalType: 'address', name: 'tokenIn', type: 'address' },
-                    { internalType: 'address', name: 'tokenOut', type: 'address' },
-                    { internalType: 'uint24', name: 'fee', type: 'uint24' },
-                    { internalType: 'address', name: 'recipient', type: 'address' },
-                    { internalType: 'uint256', name: 'amountIn', type: 'uint256' },
-                    { internalType: 'uint256', name: 'amountOutMinimum', type: 'uint256' },
-                    { internalType: 'uint160', name: 'sqrtPriceLimitX96', type: 'uint160' }
-                ],
-                internalType: 'struct IV3SwapRouter.ExactInputSingleParams',
-                name: 'params',
-                type: 'tuple'
-            }
+  {
+    inputs: [
+      {
+        components: [
+          { internalType: "address", name: "tokenIn", type: "address" },
+          { internalType: "address", name: "tokenOut", type: "address" },
+          { internalType: "uint24", name: "fee", type: "uint24" },
+          { internalType: "address", name: "recipient", type: "address" },
+          { internalType: "uint256", name: "amountIn", type: "uint256" },
+          {
+            internalType: "uint256",
+            name: "amountOutMinimum",
+            type: "uint256",
+          },
+          {
+            internalType: "uint160",
+            name: "sqrtPriceLimitX96",
+            type: "uint160",
+          },
         ],
-        name: 'exactInputSingle',
-        outputs: [{ internalType: 'uint256', name: 'amountOut', type: 'uint256' }],
-        stateMutability: 'payable',
-        type: 'function'
-    }
+        internalType: "struct IV3SwapRouter.ExactInputSingleParams",
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "exactInputSingle",
+    outputs: [{ internalType: "uint256", name: "amountOut", type: "uint256" }],
+    stateMutability: "payable",
+    type: "function",
+  },
 ];
 
 function getSwapRouter02Address(chainId: number): string {
-    const routerAddress = UNISWAP_SWAP_ROUTER02_ADDRESSES[chainId];
-    if (!routerAddress) {
-        throw new Error(`Uniswap SwapRouter02 not available on chain ${chainId}`);
-    }
-    return routerAddress;
+  const routerAddress = UNISWAP_SWAP_ROUTER02_ADDRESSES[chainId];
+  if (!routerAddress) {
+    throw new Error(`Uniswap SwapRouter02 not available on chain ${chainId}`);
+  }
+  return routerAddress;
 }
 
 // Helper function to get token address safely
 function getTokenAddress(chainId: number, symbol: string): string {
-    const chainAddresses = TOKEN_ADDRESSES[chainId as keyof typeof TOKEN_ADDRESSES];
-    if (!chainAddresses) {
-        throw new Error(`Chain ${chainId} not supported`);
-    }
-    const tokenAddress = chainAddresses[symbol as keyof typeof chainAddresses];
-    if (!tokenAddress) {
-        throw new Error(`Token ${symbol} not found on chain ${chainId}`);
-    }
-    return tokenAddress;
+  const chainAddresses =
+    TOKEN_ADDRESSES[chainId as keyof typeof TOKEN_ADDRESSES];
+  if (!chainAddresses) {
+    throw new Error(`Chain ${chainId} not supported`);
+  }
+  const tokenAddress = chainAddresses[symbol as keyof typeof chainAddresses];
+  if (!tokenAddress) {
+    throw new Error(`Token ${symbol} not found on chain ${chainId}`);
+  }
+  return tokenAddress;
 }
 
 interface Auction {
@@ -243,7 +255,9 @@ export default function MyAuctionsPage() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const auctionHubContract = getAuctionHubContract(signer);
-       const currentChainId = Number((await provider.getNetwork()).chainId).toString();
+      const currentChainId = Number(
+        (await provider.getNetwork()).chainId
+      ).toString();
 
       console.log("🔄 Sending cancel transaction...");
       console.log("Intent ID:", auction.intentId);
@@ -263,7 +277,9 @@ export default function MyAuctionsPage() {
         )
       );
 
-      toast.success("Auction cancelled successfully! Your NFT has been returned.");
+      toast.success(
+        "Auction cancelled successfully! Your NFT has been returned."
+      );
 
       // Refresh the auctions list after a short delay to get keeper updates
       setTimeout(() => {
@@ -305,28 +321,30 @@ export default function MyAuctionsPage() {
     }
 
     if (!initialized) {
-      toast.error("Please initialize Nexus first to enable cross-chain operations");
+      toast.error(
+        "Please initialize Nexus first to enable cross-chain operations"
+      );
       return;
     }
 
     const bids = auctionBids[auction.intentId] || [];
     const claim = detectPendingClaim(auction, bids, address);
-    
+
     if (!claim) {
       return;
     }
 
     setClaimingAuction(auction.intentId);
-    
+
     try {
       const decimals = 6; // USDC/USDT decimals
       const bidAmount = claim.amount;
-      const humanReadableAmount = Number(bidAmount) / (10 ** decimals);
+      const humanReadableAmount = Number(bidAmount) / 10 ** decimals;
 
       const sameChain = claim.currentChainId === claim.preferredChainId;
       const sameToken = claim.currentTokenSymbol === claim.preferredTokenSymbol;
 
-      console.log('[Claim] Analyzing claim requirements:', {
+      console.log("[Claim] Analyzing claim requirements:", {
         currentChain: claim.currentChainName,
         currentToken: claim.currentTokenSymbol,
         preferredChain: claim.preferredChainName,
@@ -338,30 +356,34 @@ export default function MyAuctionsPage() {
 
       // CASE 1: Same chain AND same token - No action needed
       if (sameChain && sameToken) {
-        console.log('[Claim] ✅ Funds already on correct chain with correct token - no action needed');
+        console.log(
+          "[Claim] ✅ Funds already on correct chain with correct token - no action needed"
+        );
         markClaimAsCompleted(auction.intentId);
-        toast.error(`Funds are already on ${claim.preferredChainName} with ${claim.preferredTokenSymbol}. No claim action needed!`);
+        toast.error(
+          `Funds are already on ${claim.preferredChainName} with ${claim.preferredTokenSymbol}. No claim action needed!`
+        );
         fetchMyAuctions();
         setClaimingAuction(null);
         return;
       }
 
       // CASE 2: Same chain BUT different token - Use Uniswap swap (Testnet)
-      /** 
+      /**
        * For mainnet deployment, we will use Nexus Swap instead of Uniswap Router
-       * 
-       * 
+       *
+       *
        * if (sameChain && !sameToken) {
-       *   
+       *
        *   try {
        *     // Use Nexus SDK swapTokens function for same-chain token swap
        *     const swapResult = await swapTokens(
        *       claim.currentTokenSymbol,
-       *       claim.preferredTokenSymbol,    
+       *       claim.preferredTokenSymbol,
        *       humanReadableAmount,
        *       claim.currentChainId
        *     );
-       *     
+       *
        *     if (swapResult && swapResult.success) {
        *       markClaimAsCompleted(auction.intentId);
        *       toast.success(`Successfully swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.currentChainName} using Nexus Swap`);
@@ -375,18 +397,28 @@ export default function MyAuctionsPage() {
        *     throw error;
        *   }
        * }
-       * 
+       *
        */
 
       // Since avail nexus swap is not yet available on testnet, we use Uniswap here
       if (sameChain && !sameToken) {
-        console.log('[Claim] 🔄 Same chain, different token - Using Uniswap swap (Testnet)');
-        
-        const swapRouter02Address = getSwapRouter02Address(claim.currentChainId);
-        const winnerTokenAddress = getTokenAddress(claim.currentChainId, claim.currentTokenSymbol);
-        const requiredTokenAddress = getTokenAddress(claim.currentChainId, claim.preferredTokenSymbol);
+        console.log(
+          "[Claim] 🔄 Same chain, different token - Using Uniswap swap (Testnet)"
+        );
 
-        console.log('[Claim] Swap details:', {
+        const swapRouter02Address = getSwapRouter02Address(
+          claim.currentChainId
+        );
+        const winnerTokenAddress = getTokenAddress(
+          claim.currentChainId,
+          claim.currentTokenSymbol
+        );
+        const requiredTokenAddress = getTokenAddress(
+          claim.currentChainId,
+          claim.preferredTokenSymbol
+        );
+
+        console.log("[Claim] Swap details:", {
           router: swapRouter02Address,
           tokenIn: winnerTokenAddress,
           tokenOut: requiredTokenAddress,
@@ -403,14 +435,17 @@ export default function MyAuctionsPage() {
         // First, approve the router to spend tokens
         const tokenContract = new ethers.Contract(
           winnerTokenAddress,
-          ['function approve(address spender, uint256 amount) returns (bool)'],
+          ["function approve(address spender, uint256 amount) returns (bool)"],
           signer
         );
 
-        console.log('[Claim] Approving tokens for swap...');
-        const approveTx = await tokenContract.approve(swapRouter02Address, bidAmount.toString());
+        console.log("[Claim] Approving tokens for swap...");
+        const approveTx = await tokenContract.approve(
+          swapRouter02Address,
+          bidAmount.toString()
+        );
         await approveTx.wait();
-        console.log('[Claim] ✓ Token approval confirmed');
+        console.log("[Claim] ✓ Token approval confirmed");
 
         // Now execute the swap
         const swapRouterContract = new ethers.Contract(
@@ -426,25 +461,29 @@ export default function MyAuctionsPage() {
           recipient: auction.seller,
           amountIn: bidAmount.toString(),
           amountOutMinimum: amountOutMinimum.toString(),
-          sqrtPriceLimitX96: 0 // No price limit for stable coins
+          sqrtPriceLimitX96: 0, // No price limit for stable coins
         };
 
-        console.log('[Claim] Executing swap with params:', swapParams);
+        console.log("[Claim] Executing swap with params:", swapParams);
         const swapTx = await swapRouterContract.exactInputSingle(swapParams);
-        console.log('[Claim] Swap transaction sent:', swapTx.hash);
-        
+        console.log("[Claim] Swap transaction sent:", swapTx.hash);
+
         const receipt = await swapTx.wait();
-        console.log('[Claim] ✓ Swap completed:', receipt);
+        console.log("[Claim] ✓ Swap completed:", receipt);
 
         markClaimAsCompleted(auction.intentId);
-        toast.success(`Successfully swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.currentChainName}`);
+        toast.success(
+          `Successfully swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.currentChainName}`
+        );
         setTimeout(() => fetchMyAuctions(), 2000);
         return;
       }
 
       // CASE 3: Different chain (with same token) - Use bridge
       if (!sameChain && sameToken) {
-        console.log('[Claim] 🌉 Different chain, same token - Using Nexus bridge');
+        console.log(
+          "[Claim] 🌉 Different chain, same token - Using Nexus bridge"
+        );
 
         const result = await bridgeTokens(
           claim.currentTokenSymbol,
@@ -453,26 +492,35 @@ export default function MyAuctionsPage() {
           [claim.currentChainId]
         );
 
-        console.log('[Claim] Bridge result:', result);
+        console.log("[Claim] Bridge result:", result);
 
         if (result) {
           markClaimAsCompleted(auction.intentId);
-          toast.success(`Successfully bridged ${humanReadableAmount} ${claim.currentTokenSymbol} from ${claim.currentChainName} to ${claim.preferredChainName}`);
+          toast.success(
+            `Successfully bridged ${humanReadableAmount} ${claim.currentTokenSymbol} from ${claim.currentChainName} to ${claim.preferredChainName}`
+          );
           setTimeout(() => fetchMyAuctions(), 2000);
         } else {
-          throw new Error('Bridge transaction failed');
+          throw new Error("Bridge transaction failed");
         }
         return;
       }
 
       // CASE 4: Different chain AND different token - Use bridgeAndExecute
       if (!sameChain && !sameToken) {
-        console.log('[Claim] 🌉🔄 Different chain AND token - Using bridge + swap');
+        console.log(
+          "[Claim] 🌉🔄 Different chain AND token - Using bridge + swap"
+        );
 
-        const swapRouter02Address = getSwapRouter02Address(claim.preferredChainId);
-        const requiredTokenAddress = getTokenAddress(claim.preferredChainId, claim.preferredTokenSymbol);
+        const swapRouter02Address = getSwapRouter02Address(
+          claim.preferredChainId
+        );
+        const requiredTokenAddress = getTokenAddress(
+          claim.preferredChainId,
+          claim.preferredTokenSymbol
+        );
 
-        console.log('[Claim] Bridge + Swap details:', {
+        console.log("[Claim] Bridge + Swap details:", {
           fromChain: claim.currentChainId,
           toChain: claim.preferredChainId,
           token: claim.currentTokenSymbol,
@@ -484,69 +532,77 @@ export default function MyAuctionsPage() {
         // For stablecoins, accept 0.5% slippage
         const amountOutMinimum = (bidAmount * BigInt(995)) / BigInt(1000);
 
-        const bridgeAndExecuteResult: BridgeAndExecuteResult = await sdk.bridgeAndExecute({
-          token: claim.currentTokenSymbol,
-          amount: bidAmount.toString(),
-          toChainId: claim.preferredChainId,
-          sourceChains: [claim.currentChainId],
-          execute: {
-            contractAddress: swapRouter02Address,
-            contractAbi: SWAP_ROUTER02_ABI,
-            functionName: 'exactInputSingle',
-            buildFunctionParams: (
-              token: any,
-              amount: string,
-              chainId: number,
-              userAddress: `0x${string}`,
-            ) => {
-              const tokenInOnDestination = getTokenAddress(chainId, claim.currentTokenSymbol);
-              
-              const swapParams = {
-                tokenIn: tokenInOnDestination, // Token address on destination chain after bridge
-                tokenOut: requiredTokenAddress, // Final desired token on destination chain
-                fee: 500, // 0.05% fee tier for stable coin pairs
-                recipient: auction.seller,
-                amountIn: amount,
-                amountOutMinimum: amountOutMinimum.toString(),
-                sqrtPriceLimitX96: 0 // No price limit for stable coins
-              };
-              
-              return {
-                functionParams: [swapParams],
-              };
-            },
-            tokenApproval: {
-              token: claim.currentTokenSymbol,
-              amount: bidAmount.toString(),
-            },
-          },
-          waitForReceipt: true,
-        } as BridgeAndExecuteParams);
+        const bridgeAndExecuteResult: BridgeAndExecuteResult =
+          await sdk.bridgeAndExecute({
+            token: claim.currentTokenSymbol,
+            amount: bidAmount.toString(),
+            toChainId: claim.preferredChainId,
+            sourceChains: [claim.currentChainId],
+            execute: {
+              contractAddress: swapRouter02Address,
+              contractAbi: SWAP_ROUTER02_ABI,
+              functionName: "exactInputSingle",
+              buildFunctionParams: (
+                token: any,
+                amount: string,
+                chainId: number,
+                userAddress: `0x${string}`
+              ) => {
+                const tokenInOnDestination = getTokenAddress(
+                  chainId,
+                  claim.currentTokenSymbol
+                );
 
-        console.log('[Claim] BridgeAndExecute result:', bridgeAndExecuteResult);
+                const swapParams = {
+                  tokenIn: tokenInOnDestination, // Token address on destination chain after bridge
+                  tokenOut: requiredTokenAddress, // Final desired token on destination chain
+                  fee: 500, // 0.05% fee tier for stable coin pairs
+                  recipient: auction.seller,
+                  amountIn: amount,
+                  amountOutMinimum: amountOutMinimum.toString(),
+                  sqrtPriceLimitX96: 0, // No price limit for stable coins
+                };
+
+                return {
+                  functionParams: [swapParams],
+                };
+              },
+              tokenApproval: {
+                token: claim.currentTokenSymbol,
+                amount: bidAmount.toString(),
+              },
+            },
+            waitForReceipt: true,
+          } as BridgeAndExecuteParams);
+
+        console.log("[Claim] BridgeAndExecute result:", bridgeAndExecuteResult);
 
         if (bridgeAndExecuteResult) {
           markClaimAsCompleted(auction.intentId);
-          toast.success(`Successfully bridged and swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.preferredChainName}`);
+          toast.success(
+            `Successfully bridged and swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.preferredChainName}`
+          );
           setTimeout(() => fetchMyAuctions(), 2000);
         } else {
-          throw new Error('Bridge and execute failed');
+          throw new Error("Bridge and execute failed");
         }
         return;
       }
-
     } catch (error: any) {
-      console.error('Claim error:', error);
-      
-      let errorMessage = 'Unknown error';
+      console.error("Claim error:", error);
+
+      let errorMessage = "Unknown error";
       if (error?.message) {
-        if (error.message.includes('user rejected') || error.message.includes('User denied')) {
-          errorMessage = 'Transaction was rejected';
+        if (
+          error.message.includes("user rejected") ||
+          error.message.includes("User denied")
+        ) {
+          errorMessage = "Transaction was rejected";
         } else {
           errorMessage = error.message;
         }
       }
-      
+
       toast.error(`Failed to claim: ${errorMessage}`);
     } finally {
       setClaimingAuction(null);
@@ -665,28 +721,28 @@ export default function MyAuctionsPage() {
   return (
     <div className="relative min-h-screen w-full bg-black">
       <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: '#1a1a1a',
-                color: '#fff',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-              },
-              success: {
-                iconTheme: {
-                  primary: '#10b981',
-                  secondary: '#fff',
-                },
-              },
-              error: {
-                iconTheme: {
-                  primary: '#ef4444',
-                  secondary: '#fff',
-                },
-              },
-            }}
-          />
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: "#1a1a1a",
+            color: "#fff",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+          },
+          success: {
+            iconTheme: {
+              primary: "#10b981",
+              secondary: "#fff",
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: "#ef4444",
+              secondary: "#fff",
+            },
+          },
+        }}
+      />
       {/* Background Grid */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]"></div>
 
@@ -880,68 +936,83 @@ export default function MyAuctionsPage() {
 
                         <div className="flex flex-col gap-2 pt-3">
                           {/* Claim Button for Settled Auctions */}
-                          {auction.status === 3 && address && (() => {
-                            const bids = auctionBids[auction.intentId] || [];
-                            const claim = detectPendingClaim(auction, bids, address);
-                            
-                            if (!claim) return null;
-                            
-                            const sameChain = claim.currentChainId === claim.preferredChainId;
-                            const sameToken = claim.currentTokenSymbol === claim.preferredTokenSymbol;
-                            
-                            // Case 1: Same chain AND same token - Hide button, show message instead
-                            if (sameChain && sameToken) {
+                          {auction.status === 3 &&
+                            address &&
+                            (() => {
+                              const bids = auctionBids[auction.intentId] || [];
+                              const claim = detectPendingClaim(
+                                auction,
+                                bids,
+                                address
+                              );
+
+                              if (!claim) return null;
+
+                              const sameChain =
+                                claim.currentChainId === claim.preferredChainId;
+                              const sameToken =
+                                claim.currentTokenSymbol ===
+                                claim.preferredTokenSymbol;
+
+                              // Case 1: Same chain AND same token - Hide button, show message instead
+                              if (sameChain && sameToken) {
+                                return (
+                                  <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3">
+                                    <p className="text-xs text-green-300 text-center">
+                                      Funds already on{" "}
+                                      {claim.preferredChainName} with{" "}
+                                      {claim.preferredTokenSymbol}
+                                    </p>
+                                  </div>
+                                );
+                              }
+
+                              // Determine button text based on case
+                              let buttonText = "";
+                              let actionIcon = "";
+
+                              if (sameChain && !sameToken) {
+                                // Case 2: Same chain, different token - Swap needed
+                                buttonText = `Swap ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol}`;
+                              } else if (!sameChain && sameToken) {
+                                // Case 3: Different chain, same token - Bridge only
+                                buttonText = `Bridge to ${claim.preferredChainName}`;
+                              } else {
+                                // Case 4: Different chain AND token - Bridge + Swap
+                                buttonText = `Bridge & Swap to ${claim.preferredTokenSymbol}`;
+                              }
+
                               return (
-                                <div className="bg-green-500/20 border border-green-500/30 rounded-lg p-3">
-                                  <p className="text-xs text-green-300 text-center">
-                                    Funds already on {claim.preferredChainName} with {claim.preferredTokenSymbol}
-                                  </p>
+                                <div className="space-y-2">
+                                  <button
+                                    onClick={() => handleClaim(auction)}
+                                    disabled={
+                                      claimingAuction === auction.intentId ||
+                                      !initialized
+                                    }
+                                    className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                                  >
+                                    {claimingAuction === auction.intentId ? (
+                                      <span className="flex items-center justify-center gap-2">
+                                        <span className="animate-spin inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></span>
+                                        Processing...
+                                      </span>
+                                    ) : (
+                                      <span className="flex items-center justify-center gap-2">
+                                        <span>{buttonText}</span>
+                                      </span>
+                                    )}
+                                  </button>
+                                  {!initialized && (
+                                    <p className="text-xs text-yellow-400 text-center">
+                                      Initialize Nexus to enable cross-chain
+                                      operations
+                                    </p>
+                                  )}
                                 </div>
                               );
-                            }
-                            
-                            // Determine button text based on case
-                            let buttonText = '';
-                            let actionIcon = '';
-                            
-                            if (sameChain && !sameToken) {
-                              // Case 2: Same chain, different token - Swap needed
-                              buttonText = `Swap ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol}`;
-                            } else if (!sameChain && sameToken) {
-                              // Case 3: Different chain, same token - Bridge only
-                              buttonText = `Bridge to ${claim.preferredChainName}`;
-                            } else {
-                              // Case 4: Different chain AND token - Bridge + Swap
-                              buttonText = `Bridge & Swap to ${claim.preferredTokenSymbol}`;
-                            }
-                            
-                            return (
-                              <div className="space-y-2">
-                                <button
-                                  onClick={() => handleClaim(auction)}
-                                  disabled={claimingAuction === auction.intentId || !initialized}
-                                  className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                                >
-                                  {claimingAuction === auction.intentId ? (
-                                    <span className="flex items-center justify-center gap-2">
-                                      <span className="animate-spin inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></span>
-                                      Processing...
-                                    </span>
-                                  ) : (
-                                    <span className="flex items-center justify-center gap-2">
-                                      <span>{buttonText}</span>
-                                    </span>
-                                  )}
-                                </button>
-                                {!initialized && (
-                                  <p className="text-xs text-yellow-400 text-center">
-                                    Initialize Nexus to enable cross-chain operations
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          })()}
-                          
+                            })()}
+
                           <div className="flex gap-2">
                             <button
                               onClick={() => setSelectedAuction(auction)}
@@ -972,17 +1043,28 @@ export default function MyAuctionsPage() {
                   {/* Icon */}
                   <div className="mb-6 flex justify-center">
                     <div className="w-24 h-24 rounded-full bg-white/10 border border-white/20 flex items-center justify-center">
-                      <svg className="w-12 h-12 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      <svg
+                        className="w-12 h-12 text-white/50"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                        />
                       </svg>
                     </div>
                   </div>
-                  
+
                   <h3 className="text-white text-2xl font-semibold mb-3">
                     No Auctions Created
                   </h3>
                   <p className="text-white/60 mb-8 max-w-md mx-auto">
-                    You haven't created any auctions yet. Start trading your NFTs across multiple blockchains.
+                    You haven't created any auctions yet. Start trading your
+                    NFTs across multiple blockchains.
                   </p>
                   <Link
                     href="/create"
