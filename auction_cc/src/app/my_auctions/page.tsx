@@ -28,7 +28,6 @@ const UNISWAP_SWAP_ROUTER02_ADDRESSES: { [chainId: number]: string } = {
   11155420: "0x94cC0AaC535CCDB3C01d6787D6413C739ae12bc4",  // Optimism Sepolia
 };
 
-// Backend Keeper API URL
 const KEEPER_API_URL = process.env.NEXT_PUBLIC_KEEPER_API_URL || "http://localhost:3001";
 
 // SwapRouter02 ABI for exactInputSingle function
@@ -73,7 +72,6 @@ function getSwapRouter02Address(chainId: number): string {
   return routerAddress;
 }
 
-// Helper function to get token address safely
 function getTokenAddress(chainId: number, symbol: string): string {
   const chainAddresses =
     TOKEN_ADDRESSES[chainId as keyof typeof TOKEN_ADDRESSES];
@@ -283,7 +281,6 @@ export default function MyAuctionsPage() {
         "Auction cancelled successfully! Your NFT has been returned."
       );
 
-      // Refresh the auctions list after a short delay to get keeper updates
       setTimeout(() => {
         fetchMyAuctions();
       }, 3000); // Wait 3 seconds for keeper to process the event
@@ -315,7 +312,6 @@ export default function MyAuctionsPage() {
     }
   };
 
-  // Comprehensive claim handler with 3 cases
   const handleClaim = async (auction: Auction) => {
     if (!isConnected || !address) {
       toast.error("Please connect your wallet");
@@ -427,14 +423,11 @@ export default function MyAuctionsPage() {
           amount: bidAmount.toString(),
         });
 
-        // For stablecoins, accept 0.5% slippage
         const amountOutMinimum = (bidAmount * BigInt(995)) / BigInt(1000);
 
-        // Get provider and signer for the current chain
         const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
 
-        // First, approve the router to spend tokens
         const tokenContract = new ethers.Contract(
           winnerTokenAddress,
           ["function approve(address spender, uint256 amount) returns (bool)"],
@@ -449,7 +442,6 @@ export default function MyAuctionsPage() {
         await approveTx.wait();
         console.log("[Claim] ✓ Token approval confirmed");
 
-        // Now execute the swap
         const swapRouterContract = new ethers.Contract(
           swapRouter02Address,
           SWAP_ROUTER02_ABI,
@@ -459,11 +451,11 @@ export default function MyAuctionsPage() {
         const swapParams = {
           tokenIn: winnerTokenAddress,
           tokenOut: requiredTokenAddress,
-          fee: 500, // 0.05% fee tier for stable coin pairs
+          fee: 500, 
           recipient: auction.seller,
           amountIn: bidAmount.toString(),
           amountOutMinimum: amountOutMinimum.toString(),
-          sqrtPriceLimitX96: 0, // No price limit for stable coins
+          sqrtPriceLimitX96: 0, 
         };
 
         console.log("[Claim] Executing swap with params:", swapParams);
@@ -615,7 +607,7 @@ export default function MyAuctionsPage() {
     if (isConnected && address) {
       fetchMyAuctions();
       // Auto-refresh every 30 seconds
-      const interval = setInterval(fetchMyAuctions, 5000);
+      const interval = setInterval(fetchMyAuctions, 30000);
       return () => clearInterval(interval);
     }
   }, [isConnected, address]);
