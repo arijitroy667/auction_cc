@@ -1,4 +1,4 @@
-# Cross-Chain NFT Auction Platform 🎨⛓️
+# Cross-Chain NFT Auction Platform ⛓️
 
 **Avail Nexus × Alchemy × Chainlink × Uniswap**
 
@@ -45,6 +45,86 @@ This approach maximizes liquidity while maintaining security and decentralizatio
 
 ### High-Level Flow
 
+![alt text](image.png)
+
+---
+
+## Usage Guide
+
+### Creating an Auction
+
+1. **Connect Wallet**: Use RainbowKit to connect MetaMask
+2. **Initialize Nexus**: Click "Initialize Nexus" button (one-time per session)
+3. **Navigate to Create Auction**
+4. **Select Your NFT**:
+   - Click "🖼️ Select from My NFTs"
+   - Choose NFT from visual gallery
+   - Contract address & token ID auto-filled
+5. **Set Auction Parameters**:
+   - Starting Price: e.g., $100 (must be > reserve)
+   - Reserve Price: e.g., $80 (minimum acceptable)
+   - Duration: 2 minutes to 7 days
+   - Preferred Token: USDC or USDT
+   - Preferred Chain: Where you want payment, where you have gas fees
+6. **Approve NFT**: Click "Approve NFT Contract" (one-time per collection)
+7. **Create Auction**: Submit transaction
+8. **Done!**: Auction is live across all chains
+
+### Placing a Bid
+
+1. **Browse Auctions**: Go to `/auctions`
+2. **Select Auction**: Click to see details
+3. **Enter Bid Amount**: Must be ≥ starting price and > current highest bid
+4. **Select Bid Chain**: Bidder can select their native chain from which they want to bid.(Where they have gas fees)
+5. **Confirm Bid**:
+   - If on different chain: Nexus SDK auto-bridges funds to the auction chain
+   - Transaction submitted to BidManager
+   - Bid locked and visible to all
+6. **Track Status**: View in "My Auctions" page
+
+### Claiming (After Auction Ends)
+
+**For Winners**:
+- All the process are automated , winner will automatically get NFT in their wallet.
+- No action needed
+
+**For Sellers**:
+1. Go to "My Auctions"
+2. Find ended auction with "Claim Tokens" button
+3. Click to claim
+4. Winning bid automatically:
+   - Bridged to your preferred chain (if different)
+   - Swapped to your preferred token (if different)
+   - All in one transaction via Nexus SDK!
+
+**For Losing Bidders**:
+- Refunds processed automatically by keeper
+- Funds returned to original chain
+- No action needed
+
+---
+
+## Nexus SDK Integration
+
+### Unified Cross-Chain Operations
+
+Our platform leverages **Avail Nexus SDK** for seamless cross-chain interoperability:
+
+- auction_cc/src/lib/nexus : Nexus SDK initialization and helper functions
+- auction_cc/src/components/bridge: Nexus bridging utilities
+- auction_cc/src/components/transfer: Nexus transfer utilities
+- auction_cc/src/components/unified_balance: Nexus unified balance utilities
+- auction_cc/src/app/my_auctions/page.tsx: Use Nexus bridge and bridgeAndExecute for claiming winning bids
+
+
+### Key Nexus Features Used
+
+| Feature | Use Case | Benefit | Why Used |
+|---------|----------|---------|----------|
+| **Unified Balance** | Show total USDC/USDT across all chains | Users see complete liquidity | |
+| **Transfer** | Direct token transfer to auction chain | User can bid to auction on any chain using their preferred chain where they have gas fees | To enable cross-chain bidding |
+| **Bridge** | Move winning bid to seller's chain | Use for cross-chain settlement | When Seller preferdChain != winnerChain but Seller's preferdToken == winnerBidToken |
+| **BridgeAndExecute** | Bridge + Swap in one transaction | Convert USDT→USDC while bridging | When Seller preferdChain != winnerChain and Seller's preferdToken != winnerBidToken |
 
 ---
 
@@ -81,67 +161,6 @@ contracts/src/
 - Release funds to seller or refund bidders post-settlement
 - Support incremental bidding (users can increase bids)
 - Emit bid events for keeper aggregation
-
----
-
-## Nexus SDK Integration
-
-### Unified Cross-Chain Operations
-
-Our platform leverages **Avail Nexus SDK** for seamless cross-chain interoperability:
-
-```typescript
-// 1. Initialize Nexus SDK (connects to all chains)
-import { NexusSDK } from '@avail-project/nexus-core';
-export const sdk = new NexusSDK({ network: 'testnet' });
-await sdk.initialize(provider); // MetaMask/WalletConnect
-
-// 2. Get Unified Balances (across all chains)
-const balances = await sdk.getUnifiedBalances();
-// Returns: { USDC: { total: 500, chains: {...} }, USDT: {...} }
-
-// 3. Bridge Tokens (for bidding)
-await sdk.bridge({
-    token: 'USDC',
-    amount: '100000000', // 100 USDC (6 decimals)
-    toChainId: 421614,   // Arbitrum Sepolia
-    sourceChains: [11155111], // From Sepolia
-    waitForReceipt: true
-});
-
-// 4. Bridge + Execute (for claims with token swap)
-await sdk.bridgeAndExecute({
-    token: 'USDC',
-    amount: '130000000',
-    toChainId: 84532, // Base Sepolia
-    sourceChains: [421614],
-    execute: {
-        contractAddress: SWAP_ROUTER_ADDRESS,
-        contractAbi: UNISWAP_V3_ABI,
-        functionName: 'exactInputSingle',
-        buildFunctionParams: (token, amount, chainId, userAddress) => ({
-            tokenIn: USDC_ADDRESS,
-            tokenOut: USDT_ADDRESS,
-            fee: 500, // 0.05% for stablecoin pairs
-            recipient: seller,
-            deadline: Math.floor(Date.now() / 1000) + 300,
-            amountIn: amount,
-            amountOutMinimum: amount * 0.995, // 0.5% slippage
-            sqrtPriceLimitX96: 0
-        }),
-        tokenApproval: { token: 'USDC', amount: '130000000' }
-    }
-});
-```
-
-### Key Nexus Features Used
-
-| Feature | Use Case | Benefit | Why Used |
-|---------|----------|---------|----------|
-| **Unified Balance** | Show total USDC/USDT across all chains | Users see complete liquidity | |
-| **Transfer** | Direct token transfer to auction chain | User can bid to auction on any chain using his preferred chain | To enable cross-chain bidding |
-| **Bridge** | Move winning bid to seller's chain | Use for cross-chain settlement | When Seller preferdChain != winnerChain but Seller's preferdToken == winnerBidToken |
-| **BridgeAndExecute** | Bridge + Swap in one transaction | Convert USDT→USDC while bridging | When Seller preferdChain != winnerChain and Seller's preferdToken != winnerBidToken |
 
 ---
 
@@ -194,7 +213,7 @@ keeper/src/
 // User on Optimism bidding on Arbitrum auction
 1. User enters bid amount (e.g., 110 USDC)
 2. Frontend calculates required transfer:
-   - From: Optimism (user's chain)
+   - From: Optimism (user chain)
    - To: Arbitrum (auction chain)
    - Amount: 110 USDC
 
@@ -223,10 +242,9 @@ keeper/src/
 
 **Advanced Claim Logic**:
 ```typescript
-// 4 Cases handled automatically:
 
 Case 1: Same chain, same token
-→ Direct transfer from BidManager to seller
+→ Direct transfer from BidManager to seller, no Claim button required
 
 Case 2: Same chain, different token
 → Use Uniswap V3 swap on that chain(testnet)
@@ -254,94 +272,33 @@ Case 4: Different chain, different token
 
 ---
 
-## Usage Guide
-
-### Creating an Auction
-
-1. **Connect Wallet**: Use RainbowKit to connect MetaMask
-2. **Initialize Nexus**: Click "Initialize Nexus" button (one-time per session)
-3. **Navigate to Create Auction**
-4. **Select Your NFT**:
-   - Click "🖼️ Select from My NFTs"
-   - Choose NFT from visual gallery
-   - Contract address & token ID auto-filled
-5. **Set Auction Parameters**:
-   - Starting Price: e.g., $100 (must be > reserve)
-   - Reserve Price: e.g., $80 (minimum acceptable)
-   - Duration: 2 minutes to 7 days
-   - Preferred Token: USDC or USDT
-   - Preferred Chain: Where you want payment
-6. **Approve NFT**: Click "Approve NFT Contract" (one-time per collection)
-7. **Create Auction**: Submit transaction
-8. **Done!**: Auction is live across all chains
-
-### Placing a Bid
-
-1. **Browse Auctions**: Go to `/auctions`
-2. **Select Auction**: Click to see details
-3. **Enter Bid Amount**: Must be ≥ starting price and > current highest bid
-4. **Confirm Bid**:
-   - If on different chain: Nexus SDK auto-bridges funds
-   - Transaction submitted to BidManager
-   - Bid locked and visible to all
-5. **Track Status**: View in "My Auctions" page
-
-### Claiming (After Auction Ends)
-
-**For Winners**:
-1. Go to "My Auctions"
-2. Find won auction with "Claim NFT" button
-3. Click to claim
-4. NFT transferred to your wallet
-
-**For Sellers**:
-1. Go to "My Auctions"
-2. Find ended auction with "Claim Tokens" button
-3. Click to claim
-4. Winning bid automatically:
-   - Bridged to your preferred chain (if different)
-   - Swapped to your preferred token (if different)
-   - All in one transaction via Nexus SDK!
-
-**For Losing Bidders**:
-- Refunds processed automatically by keeper
-- Funds returned to original chain
-- No action needed
-
----
 
 ## Technical Highlights
 
 ### 1. Avail Nexus SDK Integration
-- **Unified Liquidity**: Users see total balances across all chains
+- **Unified Liquidity**: Users see total balances across all chains, in Navbar and while bidding.
 - **Seamless Bridging**: One-click cross-chain bids
 - **Atomic Execution**: Bridge + Swap in single transaction
-- **Multi-Chain Wallet**: No manual chain switching
 
 ### 2. Visual NFT Selector
 - **Alchemy NFT API** integration
 - Displays NFT images, names, collections
 - Auto-populates contract addresses and token IDs
-- Reduces user errors by 95%
-- Setup script for easy API key configuration
 
 ### 3. Intent-Based Architecture
-- Users specify "what" they want (bid amount, preferred token/chain)
+- Sellers specify "what" they want (bid amount, preferred token/chain)
 - System handles "how" (bridging, swapping, routing)
-- Maximizes UX while maintaining decentralization
 
 ### 4. Multi-Chain Event Aggregation
 - Keeper monitors 4+ chains simultaneously
-- Normalizes bids across USDC/USDT
 - Determines winners fairly and transparently
-- Emits settlement transactions
 
 ### 5. Flexible Settlement
 - 4 settlement paths automatically chosen:
   - Direct transfer (same chain, same token)
-  - Uniswap swap (same chain, different token)
+  - Uniswap swap (same chain, different token)(For testnet), Nexus Swap for Mainnet
   - Nexus bridge (different chain, same token)
-  - Nexus bridgeAndExecute (different chain, different token)
+  - Nexus bridgeAndExecute (different chain, different token) integrated with UniswapV3
 - Optimizes for gas and speed
 
 ---
@@ -351,17 +308,5 @@ Case 4: Different chain, different token
 This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ---
-
-## Contact & Links
-
-- **Documentation**: [Notion Docs](https://your-notion-docs-link)
-- **Demo Video**: [YouTube](https://your-youtube-demo)
-- **Live Demo**: [https://cross-chain-auction.vercel.app](https://cross-chain-auction.vercel.app)
-- **Twitter**: [@YourProject](https://twitter.com/yourproject)
-- **Discord**: [Join Community](https://discord.gg/yourproject)
-
----
-
-**Built with ❤️ for the decentralized future of NFT marketplaces.**
 
 *Empowering sellers with global liquidity. Enabling buyers from any chain. Powered by Avail Nexus.*
