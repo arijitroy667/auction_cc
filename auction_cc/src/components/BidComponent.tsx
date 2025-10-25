@@ -295,9 +295,8 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
       await new Promise(resolve => setTimeout(resolve, 3000));
       await tx.wait();
-    toast.success('Bid placed successfully!', {
-      duration: 3000,
-    });
+    
+    toast.success('Bid placed successfully!');
 
        openTxToast(String(selectedChain), tx.hash);
        
@@ -319,17 +318,18 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <Toaster
             position="top-right"
             toastOptions={{
-              duration: 4000,
+              duration: 3000,
               style: {
                 background: '#1a1a1a',
                 color: '#fff',
                 border: '1px solid rgba(255, 255, 255, 0.1)',
               },
               success: {
+                duration: 3000,
                 iconTheme: {
                   primary: '#10b981',
                   secondary: '#fff',
@@ -343,16 +343,16 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
               },
             }}
           />
-      <div className="bg-zinc-900 rounded-xl p-6 w-full max-w-md border border-zinc-800">
-        <div className="flex justify-between items-center mb-4">
+      <div className="bg-zinc-900 rounded-xl p-5 w-full max-w-2xl max-h-[85vh] overflow-y-auto border border-zinc-800">
+        <div className="flex justify-between items-center mb-3">
           <h3 className="text-xl font-bold text-white">Place Bid</h3>
           <button onClick={onClose} className="text-zinc-400 hover:text-white text-2xl">×</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           {/* Bid Range Display */}
-          <div className="bg-purple-500/10 rounded-lg p-4 border border-purple-500/30">
-            <div className="text-sm text-zinc-400 mb-2">
+          <div className="bg-purple-500/10 rounded-lg p-3 border border-purple-500/30">
+            <div className="text-sm text-zinc-400">
               {bidsLoading ? (
                 <span>Loading bid information...</span>
               ) : highestBid === 0 ? (
@@ -402,7 +402,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
           {/* Existing Bid Display (if user has one) */}
           {existingBid > 0 && (
-            <div className="bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/30">
+            <div className="bg-yellow-500/10 rounded-lg p-3 border border-yellow-500/30">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-zinc-400">Your Total Bid:</span>
                 <span className="text-lg font-bold text-yellow-400">${existingBid.toFixed(2)}</span>
@@ -422,7 +422,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
           )}
 
           {/* Available Balance Display */}
-          <div className="bg-blue-500/10 rounded-lg p-4 border border-blue-500/30">
+          <div className="bg-blue-500/10 rounded-lg p-3 border border-blue-500/30">
             <div className="flex justify-between items-center">
               <span className="text-sm text-zinc-400">Available Balance (All Chains):</span>
               <span className="text-lg font-bold text-white">
@@ -439,54 +439,56 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
           </div>
 
           {/* Target Chain Selection */}
-          <div>
-            <label className="block text-sm text-zinc-400 mb-2">
-              Target Chain (Where to send funds)
-            </label>
-            <select
-              value={selectedChain}
-              onChange={(e) => setSelectedChain(Number(e.target.value))}
-              className={`w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 text-white focus:border-blue-500 focus:outline-none ${
-                existingBidChain ? 'opacity-60 cursor-not-allowed' : ''
-              }`}
-              required
-              disabled={existingBidChain !== null}
-            >
-              {supportedChains.map((chainId) => (
-                <option key={chainId} value={chainId}>
-                  {CHAIN_NAMES[chainId as keyof typeof CHAIN_NAMES]}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-zinc-500">
-              {existingBidChain 
-                ? '⚠️ You can only bid from the same chain as your first bid'
-                : 'Funds will be automatically aggregated from all chains and sent to this chain'
-              }
-            </p>
-          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-zinc-400 mb-2">
+                Target Chain (Where to send funds)
+              </label>
+              <select
+                value={selectedChain}
+                onChange={(e) => setSelectedChain(Number(e.target.value))}
+                className={`w-full px-4 py-3 rounded-lg bg-black border border-zinc-800 text-white focus:border-blue-500 focus:outline-none ${
+                  existingBidChain ? 'opacity-60 cursor-not-allowed' : ''
+                }`}
+                required
+                disabled={existingBidChain !== null}
+              >
+                {supportedChains.map((chainId) => (
+                  <option key={chainId} value={chainId}>
+                    {CHAIN_NAMES[chainId as keyof typeof CHAIN_NAMES]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-zinc-500">
+                {existingBidChain 
+                  ? '⚠️ You can only bid from the same chain as your first bid'
+                  : 'Funds will be automatically aggregated from all chains and sent to this chain'
+                }
+              </p>
+            </div>
 
-          {/* Token Selection */}
-          <div>
-            <label className="block text-sm text-zinc-400 mb-2">Select Token</label>
-            <div className="grid grid-cols-2 gap-3">
-              {SUPPORTED_TOKENS.map((token) => (
-                <button
-                  key={token}
-                  type="button"
-                  onClick={() => setSelectedToken(token)}
-                  disabled={highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6))}
-                  className={`px-4 py-3 rounded-lg font-semibold transition-all ${
-                    highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6))
-                      ? 'opacity-60 cursor-not-allowed bg-black text-zinc-600 border border-zinc-800'
-                      : selectedToken === token
-                        ? 'bg-blue-500 text-white border-2 border-blue-400'
-                        : 'bg-black text-zinc-400 border border-zinc-800 hover:border-zinc-600'
-                  }`}
-                >
-                  {token}
-                </button>
-              ))}
+            {/* Token Selection */}
+            <div>
+              <label className="block text-sm text-zinc-400 mb-2">Select Token</label>
+              <div className="grid grid-cols-2 gap-2">
+                {SUPPORTED_TOKENS.map((token) => (
+                  <button
+                    key={token}
+                    type="button"
+                    onClick={() => setSelectedToken(token)}
+                    disabled={highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6))}
+                    className={`px-4 py-3 rounded-lg font-semibold transition-all ${
+                      highestBid >= parseFloat(ethers.formatUnits(startingPrice, 6))
+                        ? 'opacity-60 cursor-not-allowed bg-black text-zinc-600 border border-zinc-800'
+                        : selectedToken === token
+                          ? 'bg-blue-500 text-white border-2 border-blue-400'
+                          : 'bg-black text-zinc-400 border border-zinc-800 hover:border-zinc-600'
+                    }`}
+                  >
+                    {token}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -521,7 +523,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
           </div>
 
           {/* Summary */}
-          <div className="bg-black/50 rounded-lg p-4 border border-zinc-800">
+          <div className="bg-black/50 rounded-lg p-3 border border-zinc-800">
             <h4 className="text-white text-sm font-semibold mb-2">Transaction Summary</h4>
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">

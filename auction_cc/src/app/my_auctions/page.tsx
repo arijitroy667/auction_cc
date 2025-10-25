@@ -152,6 +152,7 @@ export default function MyAuctionsPage() {
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [pendingClaims, setPendingClaims] = useState<{ [intentId: string]: any }>({});
+  const [locallyClaimedAuctions, setLocallyClaimedAuctions] = useState<Set<string>>(new Set());
   const { openTxToast } = useNotification();
 
   // Check for Nexus initialization status changes
@@ -167,6 +168,34 @@ export default function MyAuctionsPage() {
     const interval = setInterval(checkInitialization, 1000);
     return () => clearInterval(interval);
   }, [initialized]);
+
+  // Load locally claimed auctions from localStorage on mount
+  useEffect(() => {
+    try {
+      const storedClaims = localStorage.getItem('claimedAuctions');
+      if (storedClaims) {
+        const claimsArray = JSON.parse(storedClaims);
+        setLocallyClaimedAuctions(new Set(claimsArray));
+      }
+    } catch (error) {
+      console.error("Error loading claimed auctions from localStorage:", error);
+    }
+  }, []);
+
+  // Helper function to mark auction as claimed in localStorage
+  const markAuctionAsClaimed = (intentId: string) => {
+    try {
+      const newClaimedSet = new Set(locallyClaimedAuctions);
+      newClaimedSet.add(intentId);
+      setLocallyClaimedAuctions(newClaimedSet);
+      
+      // Save to localStorage
+      localStorage.setItem('claimedAuctions', JSON.stringify(Array.from(newClaimedSet)));
+      console.log(`[LocalStorage] Marked auction ${intentId} as claimed`);
+    } catch (error) {
+      console.error("Error saving to localStorage:", error);
+    }
+  };
 
   const fetchMyAuctions = async () => {
     if (!address) return;
@@ -402,6 +431,9 @@ export default function MyAuctionsPage() {
       await openTxToast(currentChainId, claimTx.hash);
       await claimTx.wait();
       console.log("[Claim] ✓ Auction marked as claimed on-chain");
+
+      // Immediately save to localStorage and update local state
+      markAuctionAsClaimed(auction.intentId);
 
       // Immediately update local state to show claimed status
       setMyAuctions((prevAuctions) =>
@@ -686,7 +718,24 @@ export default function MyAuctionsPage() {
     }
     
     setPendingClaims(claimsMap);
-  }, [myAuctions, auctionBids, address]);
+
+    // Clean up localStorage: remove auctions that are now showing as Claimed (status 4) on-chain
+    const currentClaimedSet = new Set(locallyClaimedAuctions);
+    let hasChanges = false;
+    
+    for (const auction of myAuctions) {
+      if (auction.status === 4 && currentClaimedSet.has(auction.intentId)) {
+        currentClaimedSet.delete(auction.intentId);
+        hasChanges = true;
+        console.log(`[LocalStorage] Removed claimed auction ${auction.intentId} (now confirmed on-chain)`);
+      }
+    }
+    
+    if (hasChanges) {
+      setLocallyClaimedAuctions(currentClaimedSet);
+      localStorage.setItem('claimedAuctions', JSON.stringify(Array.from(currentClaimedSet)));
+    }
+  }, [myAuctions, auctionBids, address, locallyClaimedAuctions]);
 
   const formatTimeLeft = (deadline: string) => {
     const now = Math.floor(Date.now() / 1000);
@@ -1008,6 +1057,7 @@ export default function MyAuctionsPage() {
                           {/* Claim Button for Settled Auctions */}
                           {auction.status === 3 &&
                             address &&
+                            !locallyClaimedAuctions.has(auction.intentId) &&
                             (() => {
                               const claim = pendingClaims[auction.intentId];
 
