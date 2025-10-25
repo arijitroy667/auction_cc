@@ -66,41 +66,7 @@ export default function Page() {
         }}
       />
 
-      {/* Fixed Status Indicator - Top Right */}
-      <div className="fixed top-20 right-6 z-50">
-        {!isConnected && (
-          <div className="bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-xl border border-gray-500/50 rounded-full px-5 py-2.5 shadow-xl shadow-gray-500/30 hover:shadow-gray-500/50 transition-all duration-300 group cursor-default">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-2.5 h-2.5 bg-gray-400 rounded-full animate-pulse" />
-              <div className="text-sm">
-                <p className="text-gray-200 font-semibold">Not Connected</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isConnected && !initialized && (
-          <div className="bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-xl border border-gray-500/50 rounded-full px-5 py-2.5 shadow-xl shadow-gray-500/30 hover:shadow-gray-500/50 transition-all duration-300 group cursor-default">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-2.5 h-2.5 bg-white rounded-full animate-pulse" />
-              <div className="text-sm">
-                <p className="text-gray-200 font-semibold">Initialize Nexus</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {isConnected && initialized && (
-          <div className="bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-xl border border-gray-500/50 rounded-full px-5 py-2.5 shadow-xl shadow-gray-500/30 hover:shadow-gray-500/50 transition-all duration-300 group cursor-default">
-            <div className="flex items-center space-x-2.5">
-              <div className="w-2.5 h-2.5 bg-white rounded-full animate-pulse" />
-              <div className="text-sm">
-                <p className="text-gray-200 font-semibold">Nexus Initialized</p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      
 
       {/* Content */}
       <div className="relative z-10">
@@ -166,7 +132,7 @@ export default function Page() {
                   description: "Smart contracts keep your NFTs and funds secure.",
                   gradient: "from-gray-700/20 to-black-100/5",
                   border: "border-gray-500/40",
-                  hoverBorder: "hover:border-gray-400/70",
+                  hover: "hover:gray-400/70",
                   icon: "🔒"
                 },
                 {
@@ -174,7 +140,7 @@ export default function Page() {
                   description: "Seamless cross-chain auctions powered by Nexus technology.",
                   gradient: "from-gray-700/20 to-black-100/5",
                   border: "border-gray-500/40",
-                  hoverBorder: "hover:border-gray-400/70",
+                  hover: "hover:gray-400/70",
                   icon: "⚡"
                 },
                 {
@@ -182,7 +148,7 @@ export default function Page() {
                   description: "Track bids and prices in real-time for better decisions.",
                   gradient: "from-gray-700/20 to-black-100/5",
                   border: "border-gray-500/40",
-                  hoverBorder: "hover:border-gray-400/70",
+                  hover: "hover:gray-400/70",
                   icon: "📊"
                 },
                 {
@@ -190,14 +156,17 @@ export default function Page() {
                   description: "Automatic repayment of outbid amounts ensures fairness.",
                   gradient: "from-gray-700/20 to-black-100/5",
                   border: "border-gray-500/40",
-                  hoverBorder: "hover:border-gray-400/70",
+                  hover: "hover:gray-400/70",
                   icon: "💰"
                 }
               ].map((feature, index) => (
                 <div
-                  key={index}
-                  className={`relative bg-gradient-to-br ${feature.gradient} backdrop-blur-2xl border ${feature.border} ${feature.hoverBorder} rounded-2xl p-6 hover:transform hover:scale-[1.02] transition-all duration-500 group overflow-hidden`}
-                >
+  key={index}
+  className={`relative bg-gradient-to-br ${feature.gradient} backdrop-blur-xl border ${feature.border} rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1.5 hover:bg-gray-800/20 hover:border-gray-400/50 shadow-md hover:shadow-xl`}
+>
+
+
+
                   <div className="absolute inset-0 opacity-5">
                     <div className="w-full h-full bg-gradient-to-br from-white/10 to-transparent" />
                   </div>

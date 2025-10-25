@@ -24,7 +24,6 @@ interface AggregatedBid {
 export default function LiveBidLeaderboard({ auctionId }: { auctionId: string }) {
   const { address } = useAccount();
   const [topBid, setTopBid] = useState<AggregatedBid | null>(null);
-  const [userBid, setUserBid] = useState<AggregatedBid | null>(null);
   const [totalBidders, setTotalBidders] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const BASE = process.env.NEXT_PUBLIC_KEEPER_API_URL || 'http://localhost:3001';
@@ -97,11 +96,6 @@ export default function LiveBidLeaderboard({ auctionId }: { auctionId: string })
 
         setTotalBidders(sorted.length);
         setTopBid(sorted[0] || null);
-        
-        if (address) {
-          const myBid = sorted.find(b => b.bidder.toLowerCase() === address.toLowerCase());
-          setUserBid(myBid || null);
-        }
       } catch (e) {
         console.error('LiveBidLeaderboard poll error:', e);
       } finally {
@@ -120,56 +114,37 @@ export default function LiveBidLeaderboard({ auctionId }: { auctionId: string })
 
   return (
     <>
-      <div className="p-5 bg-zinc-900/50 rounded-xl border border-zinc-800 space-y-4">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h4 className="text-xl font-bold text-white">Live Bids</h4>
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1.5 rounded-lg text-sm bg-green-500/20 text-green-400 border border-green-500/30 font-medium">
-              🟢 Live
-            </span>
-          </div>
+      {/* Compact one-line display */}
+      <div 
+        onClick={() => setIsModalOpen(true)}
+        className="flex items-center justify-between px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 cursor-pointer transition-all group"
+      >
+        <div className="flex items-center gap-2 text-sm">
+          <span className="flex items-center gap-1.5 text-green-400">
+            <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+            Live
+          </span>
+          <span className="text-white/50">•</span>
+          <span className="text-white/70">
+            {totalBidders} {totalBidders === 1 ? 'bid' : 'bids'}
+          </span>
+          {topBid && (
+            <>
+              <span className="text-white/50">•</span>
+              <span className="text-white font-mono font-semibold">
+                ${ethers.formatUnits(topBid.amount, 6)}
+              </span>
+            </>
+          )}
         </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="p-4 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
-            <div className="text-sm text-zinc-400 mb-1">Total Bidders</div>
-            <div className="text-2xl font-bold text-white">{totalBidders}</div>
-          </div>
-          <div className="p-4 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
-            <div className="text-sm text-zinc-400 mb-1">Highest Bid</div>
-            <div className="text-2xl font-bold text-green-400">
-              {topBid ? `$${ethers.formatUnits(topBid.amount, 6)}` : '-'}
-            </div>
-          </div>
-        </div>
-
-        {/* Your Bid */}
-        {userBid && (
-          <div className="p-4 rounded-lg bg-gradient-to-r from-blue-500/20 to-blue-600/20 border border-blue-500/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-zinc-400 mb-1">Your Total Bid</div>
-                <div className="text-2xl font-bold text-blue-400">
-                  ${ethers.formatUnits(userBid.amount, 6)}
-                </div>
-                <div className="text-xs text-zinc-500 mt-1">
-                  {userBid.chains.join(', ')} • {userBid.bidCount} {userBid.bidCount === 1 ? 'transaction' : 'transactions'}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* View All Button */}
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="w-full py-3 px-4 bg-gradient-to-r from-purple-500/20 to-blue-500/20 hover:from-purple-500/30 hover:to-blue-500/30 border border-purple-500/30 hover:border-purple-500/40 rounded-lg text-white font-medium transition-all flex items-center justify-center gap-2"
+        <svg 
+          className="w-4 h-4 text-white/40 group-hover:text-white/60 transition-colors" 
+          fill="none" 
+          stroke="currentColor" 
+          viewBox="0 0 24 24"
         >
-          <span>View All Bids</span>
-          <span>→</span>
-        </button>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
       </div>
 
       {/* Bids Modal */}
