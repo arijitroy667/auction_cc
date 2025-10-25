@@ -5,10 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CONFIG = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
-// Load environment variables
 dotenv_1.default.config();
 console.log('Loading configuration...');
-// Check if required environment variables are set
 const requiredEnvVars = [
     'KEEPER_PRIVATE_KEY',
     'SEPOLIA_RPC_URL',
@@ -29,33 +27,32 @@ exports.CONFIG = {
             id: 11155111,
             name: "ethereum",
             rpcUrl: process.env.SEPOLIA_RPC_URL,
-            auctionHubAddress: "0x7450193fd5cf58612F339CB26eA087e1dfd1B7aD",
-            bidManagerAddress: "0x05524B97E7EBd95f66aaAd5585ba44b3ab9D7486",
+            auctionHubAddress: "0x5b2a21c9F09E3C1516ADd9a54ba8F0062d82b94b",
+            bidManagerAddress: "0xE1E58945A3b5b4AA6A6E5E648d22Feb87FB88BDF",
         },
         arbitrumSepolia: {
             id: 421614,
             name: "arbitrumSepolia",
             rpcUrl: process.env.ARBITRUM_SEPOLIA_RPC_URL,
-            auctionHubAddress: "0x7450193fd5cf58612F339CB26eA087e1dfd1B7aD",
-            bidManagerAddress: "0x05524B97E7EBd95f66aaAd5585ba44b3ab9D7486",
+            auctionHubAddress: "0x5b2a21c9F09E3C1516ADd9a54ba8F0062d82b94b",
+            bidManagerAddress: "0xE1E58945A3b5b4AA6A6E5E648d22Feb87FB88BDF",
         },
         base: {
             id: 84532,
             name: "base",
             rpcUrl: process.env.BASE_SEPOLIA_RPC_URL,
-            auctionHubAddress: "0x7450193fd5cf58612F339CB26eA087e1dfd1B7aD",
-            bidManagerAddress: "0x05524B97E7EBd95f66aaAd5585ba44b3ab9D7486",
+            auctionHubAddress: "0x5b2a21c9F09E3C1516ADd9a54ba8F0062d82b94b",
+            bidManagerAddress: "0xE1E58945A3b5b4AA6A6E5E648d22Feb87FB88BDF",
         },
         optimism: {
             id: 11155420,
             name: "optimism",
             rpcUrl: process.env.OPTIMISM_SEPOLIA_RPC_URL,
-            auctionHubAddress: "0x7450193fd5cf58612F339CB26eA087e1dfd1B7aD",
-            bidManagerAddress: "0x05524B97E7EBd95f66aaAd5585ba44b3ab9D7486",
+            auctionHubAddress: "0x5b2a21c9F09E3C1516ADd9a54ba8F0062d82b94b",
+            bidManagerAddress: "0xE1E58945A3b5b4AA6A6E5E648d22Feb87FB88BDF",
         }
     },
-    // Process auctions every 2 minutes
-    processingInterval: parseInt(process.env.PROCESSING_INTERVAL || '10000'), // 10 s default
+    processingInterval: parseInt(process.env.PROCESSING_INTERVAL || '10000'),
 };
 console.log('✅ Configuration loaded successfully');
 console.log('📊 Processing interval:', exports.CONFIG.processingInterval + 'ms (' + (exports.CONFIG.processingInterval / 1000) + 's)');

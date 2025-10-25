@@ -9,7 +9,6 @@ const config_1 = require("./config");
 const event_listner_1 = require("./event-listner");
 const AUCTION_HUB_ABI_json_1 = __importDefault(require("../src/ABI/AUCTION_HUB_ABI.json"));
 const BID_MANAGER_ABI_json_1 = __importDefault(require("../src/ABI/BID_MANAGER_ABI.json"));
-// AuctionStatus enum values (must match AuctionTypes.sol)
 const AuctionStatus = {
     Created: 0,
     Active: 1,
@@ -17,7 +16,6 @@ const AuctionStatus = {
     Settled: 3,
     Cancelled: 4
 };
-// Processing lock to prevent concurrent processing of the same auction
 const processingLocks = new Set();
 function getChainConfig(chainIdentifier) {
     const chains = Object.values(config_1.CONFIG.chains);
@@ -57,13 +55,11 @@ const TOKEN_ADDRESS_TO_SYMBOL = {
         '0x7F5c764cBc14f9669B88837ca1490cCa17c31607': 'USDT',
     },
 };
-// Stable coin decimals mapping
 const STABLE_COIN_DECIMALS = {
     'USDC': 6,
     'USDT': 6,
     'USDC.e': 6,
 };
-// Stable coins that can be considered equivalent (1:1 ratio)
 const EQUIVALENT_STABLE_COINS = ['USDC', 'USDT', 'USDC.e'];
 function getTokenSymbol(tokenAddress, chainId) {
     const chainTokens = TOKEN_ADDRESS_TO_SYMBOL[chainId];
@@ -118,7 +114,6 @@ function validateStableCoinOnlyAuction(winnerToken, requiredToken, sourceChainId
 }
 async function processEndedAuctions() {
     console.log(`\n[*] 📊 Processing ended auctions... (${new Date().toLocaleTimeString()}) - 10s interval`);
-    // ✅ Use database instead of in-memory storage
     const allAuctions = await (0, event_listner_1.getAllAuctions)();
     const currentTime = Math.floor(Date.now() / 1000);
     if (allAuctions.size === 0) {
@@ -140,9 +135,7 @@ async function processEndedAuctions() {
             const provider = new ethers_1.ethers.JsonRpcProvider(auctionChain.rpcUrl);
             const auctionHub = new ethers_1.ethers.Contract(auctionChain.auctionHubAddress, AUCTION_HUB_ABI_json_1.default, provider);
             const keeperWallet = new ethers_1.ethers.Wallet(config_1.CONFIG.keeperPrivateKey, provider);
-            // Get auction from blockchain to verify current status
             const auction = await auctionHub.auctions(intentId);
-            // Check if auction exists on blockchain
             if (auction.seller === ethers_1.ethers.ZeroAddress) {
                 console.log(`   - Auction ${intentId.slice(0, 10)}... not found on blockchain, skipping`);
                 continue;
@@ -153,24 +146,19 @@ async function processEndedAuctions() {
                 console.log(`   - 🔥 Auction ${intentId.slice(0, 10)}... has ended! Processing now...`);
             }
             const auctionStatus = Number(auction.status);
-            // Skip if auction hasn't ended
             if (auctionDeadline > currentTime) {
                 continue;
             }
-            // Skip if already settled or cancelled
             if (auctionStatus === AuctionStatus.Settled || auctionStatus === AuctionStatus.Cancelled) {
                 console.log(`   - Auction ${intentId.slice(0, 10)}... already completed (status: ${auctionStatus}), skipping...`);
-                // ✅ Update database status if it doesn't match
                 if (auctionData.status !== auctionStatus) {
                     await (0, event_listner_1.updateAuctionStatus)(intentId, auctionStatus);
                 }
                 continue;
             }
             console.log(`[!] Auction ${intentId.slice(0, 10)}... on ${auctionData.sourceChain} has ended. Processing...`);
-            // Acquire processing lock to prevent concurrent processing
             processingLocks.add(intentId);
             console.log(`   - 🔒 Processing lock acquired for auction ${intentId.slice(0, 10)}...`);
-            // ✅ Use database to get bids
             const bids = await (0, event_listner_1.getBids)(intentId);
             console.log(`   - Found ${bids.length} bids for this auction`);
             if (bids.length === 0) {
@@ -180,7 +168,6 @@ async function processEndedAuctions() {
             }
             let winner = null;
             let highestBid = BigInt(0);
-            // Aggregate bids by bidder address
             const bidderMap = new Map();
             for (const bid of bids) {
                 const bidderKey = bid.bidder.toLowerCase();
@@ -198,7 +185,6 @@ async function processEndedAuctions() {
                     });
                 }
             }
-            // Find the bidder with the highest total bid
             for (const [_, aggregatedBid] of bidderMap.entries()) {
                 if (aggregatedBid.totalAmount > highestBid) {
                     highestBid = aggregatedBid.totalAmount;
@@ -216,14 +202,12 @@ async function processEndedAuctions() {
                 processingLocks.delete(intentId);
                 continue;
             }
-            // Only finalize if status is Active
             if (auctionStatus === AuctionStatus.Active) {
                 console.log("   - Step 1: Finalizing auction (marking winner)...");
                 try {
                     const finalizeTx = await auctionHub.connect(keeperWallet).finalizeAuction(intentId, winner.bidder, winner.amount);
                     await finalizeTx.wait();
                     console.log(`   - ✓ Auction finalized (status: Active → Finalized). Tx: ${finalizeTx.hash}`);
-                    // ✅ Update database status
                     await (0, event_listner_1.updateAuctionStatus)(intentId, AuctionStatus.Finalized);
                 }
                 catch (error) {
@@ -238,12 +222,10 @@ async function processEndedAuctions() {
             else if (auctionStatus === AuctionStatus.Finalized) {
                 console.log("   - Step 1: Auction already finalized, proceeding to settlement...");
             }
-            // Step 2: Cross-chain settlement
             console.log("   - Step 2: Starting cross-chain settlement...");
             try {
                 await settleCrossChainAuction(intentId, auction, winner, bids, auctionData.sourceChain);
                 console.log(`   - ✓ Cross-chain settlement completed for auction ${intentId.slice(0, 10)}...`);
-                // ✅ Update database status to settled
                 await (0, event_listner_1.updateAuctionStatus)(intentId, AuctionStatus.Settled);
             }
             catch (error) {
@@ -251,7 +233,6 @@ async function processEndedAuctions() {
                 processingLocks.delete(intentId);
                 continue;
             }
-            // Release processing lock after successful completion
             processingLocks.delete(intentId);
             console.log(`   - 🔓 Processing lock released for auction ${intentId.slice(0, 10)}...`);
         }
@@ -266,15 +247,12 @@ async function settleCrossChainAuction(intentId, auction, winner, allBids, sourc
     try {
         console.log(`   - Starting cross-chain settlement for auction ${intentId.slice(0, 10)}...`);
         const sourceChainConfig = getChainConfig(sourceChain);
-        // Handle preferred chain properly - it might be stored as different property names
         let targetChainConfig;
         if (auction.preferdChain !== undefined && auction.preferdChain !== null && auction.preferdChain !== "") {
-            // try numeric id first
             const numericId = Number(auction.preferdChain);
             if (!isNaN(numericId) && numericId !== 0) {
                 targetChainConfig = Object.values(config_1.CONFIG.chains).find(c => Number(c.id) === numericId);
             }
-            // fallback: try using getChainConfig (handles name or id)
             if (!targetChainConfig) {
                 targetChainConfig = getChainConfig(auction.preferdChain);
             }
@@ -290,14 +268,12 @@ async function settleCrossChainAuction(intentId, auction, winner, allBids, sourc
         }
         console.log(`   - Source chain: ${sourceChain} (${sourceChainConfig.name})`);
         console.log(`   - Target chain: ${targetChain.name} (${targetConfig.id})`);
-        // Get BidManager contract on winner's chain to release the winning bid
         const winnerChainConfig = getChainConfig(winner.sourceChain);
         if (!winnerChainConfig) {
             throw new Error(`Winner's chain configuration not found: ${winner.sourceChain}`);
         }
         const sourceProvider = new ethers_1.ethers.JsonRpcProvider(winnerChainConfig.rpcUrl);
         const bidManager = new ethers_1.ethers.Contract(winnerChainConfig.bidManagerAddress, BID_MANAGER_ABI_json_1.default, new ethers_1.ethers.Wallet(config_1.CONFIG.keeperPrivateKey, sourceProvider));
-        // Release the winning bid from BidManager
         console.log(`   - Releasing winning bid from BidManager on ${winner.sourceChain}...`);
         const releaseTx = await bidManager.releaseWinningBid(intentId, winner.bidder, auction.seller);
         await releaseTx.wait();
@@ -305,23 +281,19 @@ async function settleCrossChainAuction(intentId, auction, winner, allBids, sourc
         const winnerTokenAddress = winner.token;
         const requiredTokenAddress = auction.preferdToken;
         const bidAmount = winner.amount;
-        // Validate that we're working with stable coins as expected
         validateStableCoinOnlyAuction(winnerTokenAddress, requiredTokenAddress, winnerChainConfig.id, targetConfig.id);
-        // Convert token addresses to symbols
         const winnerTokenSymbol = getTokenSymbol(winnerTokenAddress, winnerChainConfig.id);
         const requiredTokenSymbol = getTokenSymbol(requiredTokenAddress, targetConfig.id);
         console.log(`   - Winner token: ${winnerTokenSymbol} (${formatStableCoinAmount(bidAmount, winnerTokenSymbol)})`);
         console.log(`   - Required token: ${requiredTokenSymbol}`);
         console.log(`   - Current location: ${winnerChainConfig.name} (${winnerChainConfig.id})`);
         console.log(`   - Preferred destination: ${targetConfig.name} (${targetConfig.id})`);
-        // ✅ UPDATED: No automatic cross-chain transfer - seller must claim manually
         if (winnerChainConfig.id === targetConfig.id && winnerTokenSymbol === requiredTokenSymbol) {
             console.log(`   - 🎉 Perfect match! Funds already on seller's preferred chain with correct token!`);
             console.log(`   - ✅ No additional action needed - settlement complete`);
             console.log(`   - 💰 Seller has: ${formatStableCoinAmount(bidAmount, winnerTokenSymbol)} ${winnerTokenSymbol} on ${winnerChainConfig.name}`);
         }
         else {
-            // All other cases require manual intervention via frontend
             console.log(`   - 🔄 Cross-chain/token transfer needed - manual claim required`);
             console.log(`   - 💰 Available: ${formatStableCoinAmount(bidAmount, winnerTokenSymbol)} ${winnerTokenSymbol} on ${winnerChainConfig.name}`);
             console.log(`   - 🎯 Target: ${requiredTokenSymbol} on ${targetConfig.name}`);
@@ -347,7 +319,6 @@ async function settleCrossChainAuction(intentId, auction, winner, allBids, sourc
         }
         console.log(`   - 📝 Backend only releases funds - frontend handles cross-chain operations`);
         console.log(`   - ✅ Fund release phase completed successfully`);
-        // Refund losing bidders
         console.log(`   - Refunding losing bidders...`);
         for (const bid of allBids) {
             if (bid.bidder.toLowerCase() !== winner.bidder.toLowerCase()) {
@@ -367,11 +338,9 @@ async function settleCrossChainAuction(intentId, auction, winner, allBids, sourc
                 }
                 catch (error) {
                     console.error(`   - ❌ Failed to refund bidder ${bid.bidder.slice(0, 8)}... on ${bid.sourceChain}:`, error);
-                    // Continue with other refunds even if one fails
                 }
             }
         }
-        // Finally, release the NFT to the winner
         console.log(`   - Releasing NFT to winner...`);
         const auctionChainConfig = getChainConfig(sourceChain);
         if (!auctionChainConfig) {

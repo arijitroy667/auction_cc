@@ -15,6 +15,7 @@ library AuctionTypes {
         Active,
         Finalized,
         Settled,
+        Claimed,
         Cancelled
     }
 

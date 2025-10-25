@@ -30,7 +30,6 @@ class DatabaseService {
             console.log('📊 Connected to MongoDB successfully');
             console.log(`📍 Database: ${mongoose_1.default.connection.db?.databaseName}`);
             console.log(`🌐 Host: ${mongoose_1.default.connection.host}:${mongoose_1.default.connection.port}`);
-            // Handle connection events
             mongoose_1.default.connection.on('error', (error) => {
                 console.error('❌ MongoDB connection error:', error);
             });
@@ -62,7 +61,6 @@ class DatabaseService {
             throw error;
         }
     }
-    // Auction Methods
     async addAuction(auctionData) {
         try {
             const auction = new auction_model_1.default({
@@ -86,7 +84,6 @@ class DatabaseService {
         }
         catch (error) {
             if (error.code === 11000) {
-                // Duplicate key error - auction already exists
                 console.log(`[+] 📝 Auction ${auctionData.intentId.slice(0, 10)}... already exists in DB`);
                 const existingAuction = await auction_model_1.default.findOne({ intentId: auctionData.intentId });
                 if (existingAuction) {
@@ -138,7 +135,7 @@ class DatabaseService {
     async getActiveAuctions() {
         try {
             return await auction_model_1.default.find({
-                status: { $in: [0, 1] } // Active or Finalized but not yet settled
+                status: { $in: [0, 1] }
             }).sort({ deadline: 1 });
         }
         catch (error) {
@@ -146,16 +143,13 @@ class DatabaseService {
             throw error;
         }
     }
-    // Bid Methods
     async addBid(bidData) {
         try {
-            // ✅ IMPROVED: Better fallback transaction ID generation
             let txHash = bidData.transactionHash;
             if (!txHash || txHash === 'unknown') {
-                // Generate a more unique fallback ID
                 const timestamp = Date.now();
                 const random = Math.floor(Math.random() * 1000000);
-                const bidderShort = bidData.bidder.slice(-8); // Last 8 chars of bidder address
+                const bidderShort = bidData.bidder.slice(-8);
                 txHash = `gen-${bidderShort}-${timestamp}-${random}`;
                 console.log(`[!] 🔄 Generated fallback transaction ID for bid: ${txHash}`);
                 console.log(`[!]    - Intent: ${bidData.intentId.slice(0, 10)}...`);
@@ -181,12 +175,10 @@ class DatabaseService {
         }
         catch (error) {
             if (error.code === 11000) {
-                // Duplicate transaction hash - bid already processed
                 const txDisplay = String(bidData.transactionHash || 'generated').startsWith('gen-')
                     ? `${bidData.transactionHash} (generated)`
                     : String(bidData.transactionHash || 'generated').slice(0, 10) + '...';
                 console.log(`[+] 📝 Bid transaction ${txDisplay} already processed`);
-                // Try to find the existing bid
                 const existingBid = await bid_model_1.default.findOne({
                     $or: [
                         { transactionHash: bidData.transactionHash },
@@ -208,7 +200,6 @@ class DatabaseService {
     }
     async getBids(intentId) {
         try {
-            // ✅ Return all bids for this intent - let the processor aggregate them
             return await bid_model_1.default.find({ intentId }).sort({ timestamp: 1 });
         }
         catch (error) {
@@ -216,11 +207,9 @@ class DatabaseService {
             throw error;
         }
     }
-    // ✅ NEW: Add method to get aggregated bids by bidder for an intent
     async getAggregatedBids(intentId) {
         try {
             const bids = await bid_model_1.default.find({ intentId }).sort({ timestamp: 1 });
-            // Group bids by bidder address (case-insensitive)
             const bidderMap = new Map();
             for (const bid of bids) {
                 const bidderKey = bid.bidder.toLowerCase();
@@ -233,7 +222,7 @@ class DatabaseService {
                 }
                 else {
                     bidderMap.set(bidderKey, {
-                        bidder: bid.bidder, // Keep original case
+                        bidder: bid.bidder,
                         totalAmount: bidAmount,
                         token: bid.token,
                         sourceChain: bid.sourceChain,
@@ -242,7 +231,6 @@ class DatabaseService {
                     });
                 }
             }
-            // Convert to array format
             return Array.from(bidderMap.values()).map(aggregated => ({
                 bidder: aggregated.bidder,
                 totalAmount: aggregated.totalAmount.toString(),
@@ -260,7 +248,6 @@ class DatabaseService {
     async getAllBids() {
         try {
             const bids = await bid_model_1.default.find({}).sort({ timestamp: -1 });
-            // Group bids by intentId
             const bidMap = new Map();
             bids.forEach(bid => {
                 if (!bidMap.has(bid.intentId)) {
@@ -287,7 +274,6 @@ class DatabaseService {
             throw error;
         }
     }
-    // Health check method
     async healthCheck() {
         try {
             if (!this.isConnected) {
@@ -306,7 +292,6 @@ class DatabaseService {
             return { connected: false };
         }
     }
-    // Get statistics
     async getStats() {
         try {
             const auctionCount = await auction_model_1.default.countDocuments();

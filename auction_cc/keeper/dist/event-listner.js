@@ -46,9 +46,7 @@ function debugEventStructure(event, eventType = 'unknown') {
     }
     console.log(`   - All keys:`, Object.keys(event));
 }
-// Store active contracts for cleanup
 let activeContracts = [];
-// Track processed events to prevent duplicates
 const processedEvents = new Set();
 async function addBid(intentId, bid) {
     try {
@@ -178,7 +176,6 @@ async function updateAuctionStatus(intentId, status, additionalData) {
 }
 function cleanupExistingListeners() {
     console.log(`   - Cleaning up ${activeContracts.length} existing event listeners...`);
-    // Remove all listeners from existing contracts
     for (const contract of activeContracts) {
         try {
             contract.removeAllListeners();
@@ -187,7 +184,6 @@ function cleanupExistingListeners() {
             console.warn(`   - Warning: Failed to remove listeners from contract:`, error);
         }
     }
-    // Clear the active contracts array
     activeContracts = [];
 }
 async function startEventListeners() {
@@ -200,27 +196,20 @@ async function startEventListeners() {
         }
         try {
             const provider = new ethers_1.ethers.JsonRpcProvider(chain.rpcUrl);
-            // BidManager contract
             const bidManagerContract = new ethers_1.ethers.Contract(chain.bidManagerAddress, BID_MANAGER_ABI_json_1.default, provider);
             activeContracts.push(bidManagerContract);
-            // ✅ FIXED: Always process bid events, don't skip due to missing tx hash
             bidManagerContract.on("BidPlaced", async (intentId, bidder, token, amount, event) => {
                 try {
-                    // Try multiple approaches to get transaction hash
                     let txHash = null;
-                    // Method 1: From event.log
                     if (event.log?.transactionHash) {
                         txHash = event.log.transactionHash;
                     }
-                    // Method 2: Direct from event
                     else if (event.transactionHash) {
                         txHash = event.transactionHash;
                     }
-                    // Method 3: From event.receipt if available
                     else if (event.receipt?.transactionHash) {
                         txHash = event.receipt.transactionHash;
                     }
-                    // Method 4: Try to get transaction hash from provider
                     else if (event.blockNumber && event.transactionIndex !== undefined) {
                         try {
                             const block = await provider.getBlock(event.blockNumber);
@@ -232,18 +221,16 @@ async function startEventListeners() {
                             console.warn('   - Could not fetch transaction from block:', error);
                         }
                     }
-                    // ✅ CHANGED: Don't skip - log warning but continue processing
                     if (!txHash) {
                         console.warn(`⚠️  Could not extract transaction hash from bid event - will generate fallback ID`);
-                        debugEventStructure(event, 'BidPlaced'); // Add this line for debugging
+                        debugEventStructure(event, 'BidPlaced');
                         console.warn(`   - Event keys:`, Object.keys(event));
                         console.warn(`   - Will proceed with bid processing using generated transaction ID`);
-                        txHash = 'unknown'; // Let db_service.addBid() handle the fallback generation
+                        txHash = 'unknown';
                     }
                     const blockNumber = event.log?.blockNumber || event.blockNumber || 0;
                     const logIndex = event.log?.logIndex !== undefined ? event.log.logIndex :
                         event.logIndex !== undefined ? event.logIndex : Math.random();
-                    // ✅ Use timestamp + random for event ID when txHash is unknown
                     const eventId = txHash !== 'unknown'
                         ? `${txHash}-${logIndex}-bid-${intentId}`
                         : `unknown-${Date.now()}-${Math.random()}-bid-${intentId}`;
@@ -261,7 +248,7 @@ async function startEventListeners() {
                         amount: amount.toString(),
                         token,
                         sourceChain: chain.name,
-                        transactionHash: txHash, // Can be 'unknown' - db service will handle it
+                        transactionHash: txHash,
                         timestamp: new Date().toISOString()
                     };
                     console.log(`🎉 NEW BID EVENT on ${chain.name}! Processing...`);
@@ -278,14 +265,11 @@ async function startEventListeners() {
             });
             totalListeners++;
             console.log(`   - ✅ Listening for bids on ${chain.name}`);
-            // AuctionHub contract (if available)
             if (chain.auctionHubAddress) {
                 const auctionHub = new ethers_1.ethers.Contract(chain.auctionHubAddress, AUCTION_HUB_ABI_json_1.default, provider);
                 activeContracts.push(auctionHub);
-                // ✅ FIXED: Listen for new auction events with proper transaction hash handling
                 auctionHub.on("AuctionCreated", async (intentId, seller, nftContract, tokenId, startingPrice, reservePrice, deadline, preferdToken, preferdChain, event) => {
                     try {
-                        // Get transaction hash from the event log
                         const txHash = event.log?.transactionHash || event.transactionHash || 'unknown';
                         const blockNumber = event.log?.blockNumber || event.blockNumber || 0;
                         const logIndex = event.log?.logIndex !== undefined ? event.log.logIndex :
@@ -309,7 +293,6 @@ async function startEventListeners() {
                         console.log(`   Preferred Token: ${preferdToken}`);
                         console.log(`   Preferred Chain: ${preferdChain.toString()}`);
                         console.log(`   TX Hash: ${txHash}`);
-                        // Validate that txHash is not undefined or 'unknown'
                         if (!txHash || txHash === 'unknown') {
                             console.error(`❌ Invalid transaction hash for auction ${intentId}: ${txHash}`);
                             console.error(`   - Event object:`, {
@@ -333,8 +316,8 @@ async function startEventListeners() {
                             preferdToken,
                             preferdChain: preferdChain.toString(),
                             sourceChain: chain.name,
-                            status: 0, // Active
-                            txHash: txHash, // ✅ Ensure txHash is properly set
+                            status: 0,
+                            txHash: txHash,
                             timestamp: new Date().toISOString()
                         };
                         await addAuction(intentId, auction);
@@ -343,10 +326,8 @@ async function startEventListeners() {
                         console.error('❌ Error processing auction event:', error);
                     }
                 });
-                // ✅ FIXED: Listen for auction cancelled events with proper transaction hash handling
                 auctionHub.on("AuctionCancelled", async (intentId, event) => {
                     try {
-                        // Get transaction hash from the event log
                         const txHash = event.log?.transactionHash || event.transactionHash || 'unknown';
                         const blockNumber = event.log?.blockNumber || event.blockNumber || 0;
                         const logIndex = event.log?.logIndex !== undefined ? event.log.logIndex :
@@ -384,13 +365,10 @@ async function startEventListeners() {
 }
 async function restartEventListeners() {
     console.log("[*] Restarting event listeners for fresh connections...");
-    // Clean up existing listeners
     cleanupExistingListeners();
-    // Start fresh listeners
     await startEventListeners();
     console.log("[✓] Event listeners restarted successfully");
 }
-// Cleanup function for graceful shutdown
 function cleanupEventListeners() {
     console.log("[*] Cleaning up all event listeners...");
     cleanupExistingListeners();

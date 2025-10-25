@@ -104,10 +104,9 @@ const AuctionSchema = new mongoose_1.Schema({
         required: false
     }
 }, {
-    timestamps: true, // Adds createdAt and updatedAt
+    timestamps: true,
     collection: 'auctions'
 });
-// Compound indexes for better query performance
 AuctionSchema.index({ status: 1, deadline: 1 });
 AuctionSchema.index({ sourceChain: 1, status: 1 });
 AuctionSchema.index({ seller: 1, status: 1 });

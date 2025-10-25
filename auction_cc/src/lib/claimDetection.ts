@@ -1,33 +1,5 @@
 import { PendingClaim } from '@/types/claim';
 
-// Track completed claims in localStorage
-const COMPLETED_CLAIMS_KEY = 'completed_claims';
-
-function getCompletedClaims(): Set<string> {
-    if (typeof window === 'undefined') return new Set();
-    try {
-        const stored = localStorage.getItem(COMPLETED_CLAIMS_KEY);
-        return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-        return new Set();
-    }
-}
-
-export function markClaimAsCompleted(intentId: string): void {
-    if (typeof window === 'undefined') return;
-    try {
-        const completed = getCompletedClaims();
-        completed.add(intentId);
-        localStorage.setItem(COMPLETED_CLAIMS_KEY, JSON.stringify([...completed]));
-    } catch (error) {
-        console.error('Failed to mark claim as completed:', error);
-    }
-}
-
-function isClaimCompleted(intentId: string): boolean {
-    return getCompletedClaims().has(intentId);
-}
-
 // Chain enum mapping (contract uses uint8: 0=Ethereum, 1=Arbitrum, 2=Base, 3=Optimism)
 const CHAIN_ENUM_TO_ID: { [key: number]: number } = {
     0: 11155111,  // Ethereum Sepolia
@@ -138,15 +110,15 @@ interface Bid {
 /**
  * Detects if an auction has pending claims for the seller
  * Returns PendingClaim object if funds need to be claimed
+ * Checks on-chain status - status 4 (Claimed) means already claimed
  */
 export function detectPendingClaim(
     auction: Auction,
     bids: Bid[],
     sellerAddress: string
 ): PendingClaim | null {
+    // Status 3 = Settled (ready to claim), Status 4 = Claimed (already claimed)
     if (auction.status !== 3) return null;
-    
-    if (isClaimCompleted(auction.intentId)) return null;
     
     if (auction.seller.toLowerCase() !== sellerAddress.toLowerCase()) return null;
     

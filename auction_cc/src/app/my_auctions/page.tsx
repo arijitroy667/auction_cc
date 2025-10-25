@@ -8,7 +8,7 @@ import Navbar from "@/components/navbar";
 import Link from "next/link";
 import { ethers } from "ethers";
 import { getAuctionHubContract } from "@/lib/auctionHub";
-import { detectPendingClaim, markClaimAsCompleted } from "@/lib/claimDetection";
+import { detectPendingClaim } from "@/lib/claimDetection";
 import { result as bridgeTokens } from "@/components/bridge/bridge";
 import { sdk } from "@/lib/nexus/nexusClient";
 import { toast, Toaster } from "react-hot-toast";
@@ -137,7 +137,8 @@ const STATUS_NAMES = {
   1: "Active",
   2: "Finalized",
   3: "Settled",
-  4: "Cancelled",
+  4: "Claimed",
+  5: "Cancelled",
 };
 
 export default function MyAuctionsPage() {
@@ -150,6 +151,7 @@ export default function MyAuctionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [pendingClaims, setPendingClaims] = useState<{ [intentId: string]: any }>({});
   const { openTxToast } = useNotification();
 
   // Check for Nexus initialization status changes
@@ -352,14 +354,28 @@ export default function MyAuctionsPage() {
         sameToken,
       });
 
+      console.log("[Claim] Step 1: Marking auction as claimed on-chain...");
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const auctionHubContract = getAuctionHubContract(signer);
+      const currentChainId = Number(
+        (await provider.getNetwork()).chainId
+      ).toString();
+
+      const claimTx = await auctionHubContract.claimAuction(auction.intentId);
+      console.log("[Claim] Claim transaction sent:", claimTx.hash);
+      await openTxToast(currentChainId, claimTx.hash);
+      await claimTx.wait();
+      console.log("[Claim] ✓ Auction marked as claimed on-chain");
+
       // CASE 1: Same chain AND same token - No action needed
       if (sameChain && sameToken) {
         console.log(
           "[Claim] ✅ Funds already on correct chain with correct token - no action needed"
         );
-        markClaimAsCompleted(auction.intentId);
-        toast.error(
-          `Funds are already on ${claim.preferredChainName} with ${claim.preferredTokenSymbol}. No claim action needed!`
+        
+        toast.success(
+          `Auction claimed! Funds are already on ${claim.preferredChainName} with ${claim.preferredTokenSymbol}.`
         );
         fetchMyAuctions();
         setClaimingAuction(null);
@@ -464,8 +480,7 @@ export default function MyAuctionsPage() {
 
         const receipt = await swapTx.wait();
         console.log("[Claim] ✓ Swap completed:", receipt);
-
-        markClaimAsCompleted(auction.intentId);
+        
         toast.success(
           `Successfully swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.currentChainName}`
         );
@@ -489,7 +504,6 @@ export default function MyAuctionsPage() {
         console.log("[Claim] Bridge result:", result);
 
         if (result) {
-          markClaimAsCompleted(auction.intentId);
           toast.success(
             `Successfully bridged ${humanReadableAmount} ${claim.currentTokenSymbol} from ${claim.currentChainName} to ${claim.preferredChainName}`
           );
@@ -572,7 +586,6 @@ export default function MyAuctionsPage() {
         console.log("[Claim] BridgeAndExecute result:", bridgeAndExecuteResult);
 
         if (bridgeAndExecuteResult) {
-          markClaimAsCompleted(auction.intentId);
           toast.success(
             `Successfully bridged and swapped ${humanReadableAmount} ${claim.currentTokenSymbol} to ${claim.preferredTokenSymbol} on ${claim.preferredChainName}`
           );
@@ -611,6 +624,25 @@ export default function MyAuctionsPage() {
       return () => clearInterval(interval);
     }
   }, [isConnected, address]);
+
+  // Detect pending claims for settled auctions
+  useEffect(() => {
+    if (!address || myAuctions.length === 0) return;
+
+    const claimsMap: { [intentId: string]: any } = {};
+    
+    for (const auction of myAuctions) {
+      if (auction.status === 3) { // Only check settled auctions (status 3 = Settled, not yet claimed)
+        const bids = auctionBids[auction.intentId] || [];
+        const claim = detectPendingClaim(auction, bids, address);
+        if (claim) {
+          claimsMap[auction.intentId] = claim;
+        }
+      }
+    }
+    
+    setPendingClaims(claimsMap);
+  }, [myAuctions, auctionBids, address]);
 
   const formatTimeLeft = (deadline: string) => {
     const now = Math.floor(Date.now() / 1000);
@@ -933,12 +965,7 @@ export default function MyAuctionsPage() {
                           {auction.status === 3 &&
                             address &&
                             (() => {
-                              const bids = auctionBids[auction.intentId] || [];
-                              const claim = detectPendingClaim(
-                                auction,
-                                bids,
-                                address
-                              );
+                              const claim = pendingClaims[auction.intentId];
 
                               if (!claim) return null;
 
@@ -963,7 +990,6 @@ export default function MyAuctionsPage() {
 
                               // Determine button text based on case
                               let buttonText = "";
-                              let actionIcon = "";
 
                               if (sameChain && !sameToken) {
                                 // Case 2: Same chain, different token - Swap needed

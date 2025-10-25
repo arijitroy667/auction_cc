@@ -124,6 +124,23 @@ export class AuctionHubContract {
   }
 
   /**
+   * Claims an auction (marks it as claimed on-chain)
+   */
+  async claimAuction(intentId: string): Promise<ethers.ContractTransactionResponse> {
+    try {
+      console.log("📤 Calling claimAuction with intentId:", intentId);
+      
+      const tx = await this.contract.claimAuction(intentId);
+      console.log("📤 Claim transaction sent:", tx.hash);
+      
+      return tx;
+    } catch (error) {
+      console.error('Error claiming auction:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Gets all intent IDs
    */
   async getAllIntentIds() {

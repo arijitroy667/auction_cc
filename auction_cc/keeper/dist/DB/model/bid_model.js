@@ -62,7 +62,7 @@ const BidSchema = new mongoose_1.Schema({
     transactionHash: {
         type: String,
         required: true,
-        unique: true // ✅ Each transaction hash must be unique
+        unique: true
     },
     timestamp: {
         type: String,
@@ -72,8 +72,7 @@ const BidSchema = new mongoose_1.Schema({
     timestamps: true,
     collection: 'bids'
 });
-// ✅ UPDATED: Better indexes for querying
-BidSchema.index({ intentId: 1, bidder: 1 }); // For aggregating bids by bidder
-BidSchema.index({ intentId: 1, timestamp: 1 }); // For chronological order
-BidSchema.index({ bidder: 1, sourceChain: 1 }); // For bidder's history
+BidSchema.index({ intentId: 1, bidder: 1 });
+BidSchema.index({ intentId: 1, timestamp: 1 });
+BidSchema.index({ bidder: 1, sourceChain: 1 });
 exports.default = mongoose_1.default.model('Bid', BidSchema);
