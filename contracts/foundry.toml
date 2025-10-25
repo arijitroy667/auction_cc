@@ -7,4 +7,19 @@ remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/"
 ]
 
+[rpc_endpoints]
+sepolia = "${SEPOLIA_RPC}"
+amoy = "${AMOY_RPC}"
+arb_sepolia = "${ARB_SEPOLIA_RPC}"
+op_sepolia = "${OP_SEPOLIA_RPC}"
+base_sepolia = "${BASE_SEPOLIA_RPC}"
+
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
+amoy = { key = "${ETHERSCAN_API_KEY}", url = "https://api.polygonscan.com/api" }
+arb_sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api.arbiscan.io/api" }
+op_sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api-optimistic.etherscan.io/api" }
+base_sepolia = { key = "${ETHERSCAN_API_KEY}", url = "https://api.basescan.org/api" }
+
+
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

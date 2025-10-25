@@ -39,10 +39,9 @@ contract BidManager is ReentrancyGuard {
         _;
     }
 
-    constructor() {
-        owner = msg.sender;
-    }
-
+constructor(address _owner) {
+    owner = _owner;
+}
     // --- Core Bidding Function ---
     /**
      * @notice Place a bid after tokens have been transferred via Nexus SDK
@@ -96,7 +95,7 @@ contract BidManager is ReentrancyGuard {
 
         bid.settled = true;
         
-        // Transfer to seller on winner's chain (seller will claim/bridge via frontend if needed)
+        // Transfer to seller
         IERC20(bid.token).safeTransfer(seller, bid.amount);
         emit WinningBidReleased(intentId, winner);
     }

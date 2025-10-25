@@ -19,7 +19,7 @@ interface IAuctionHub {
         uint256 reservePrice,
         uint256 deadline,
         address preferdToken,
-        uint8 preferdChain
+        uint256 preferdChain
     );
     
     event AuctionCancelled(bytes32 indexed intentId);
@@ -43,7 +43,7 @@ interface IAuctionHub {
         uint256 reservePrice,
         uint256 deadline,
         address preferdToken,
-        uint8 preferdChain
+        uint256 preferdChain
     ) external returns (bytes32);
 
     /**
@@ -87,7 +87,7 @@ interface IAuctionHub {
         uint256,
         uint256,
         address,
-        uint8,
+        uint256,
         address,
         uint256,
         AuctionTypes.AuctionStatus

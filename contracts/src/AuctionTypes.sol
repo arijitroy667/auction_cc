@@ -42,7 +42,7 @@ library AuctionTypes {
         uint256 reservePrice;
         uint256 deadline;
         address preferdToken;
-        uint8 preferdChain;
+        uint256 preferdChain;
         address highestBidder;
         uint256 highestBid;
         AuctionStatus status;
@@ -58,6 +58,8 @@ library AuctionTypes {
      * @param settled Whether the bid has been settled/processed
      * @param sourceChain Chain ID where the bid was placed (locked after first bid)
      */
+     
+     
     struct Bid {
         bytes32 intentId;
         address bidder;
