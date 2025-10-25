@@ -42,7 +42,7 @@ library AuctionTypes {
         uint256 reservePrice;
         uint256 deadline;
         address preferdToken;
-        uint8 preferdChain;
+        uint256 preferdChain;
         address highestBidder;
         uint256 highestBid;
         AuctionStatus status;
@@ -57,6 +57,8 @@ library AuctionTypes {
      * @param timestamp Unix timestamp when the bid was placed
      * @param settled Whether the bid has been settled/processed
      */
+     
+     
     struct Bid {
         bytes32 intentId;
         address bidder;
