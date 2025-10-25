@@ -144,7 +144,7 @@ export default function Navbar({
             <div className="flex items-center gap-8">
               <Link href="/" className="flex-shrink-0">
                 <h1 className="text-white text-xl font-bold tracking-tight hover:text-blue-400 transition-colors">
-                  Auction.cc
+                  XBid
                 </h1>
               </Link>
 

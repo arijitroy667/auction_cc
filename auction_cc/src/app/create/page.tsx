@@ -296,7 +296,35 @@ setTimeout(() => {
     
       {/* Background Grid */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]"></div>
+{/* Status messages */}
+            {/* Fixed Status Indicator - Top Right */}
+<div className="fixed top-20 right-6 z-50 ">
 
+  {/* Not Connected */}
+  {!isConnected && (
+    <div className="bg-gradient-to-r from-yellow-800/90 to-yellow-700/90 backdrop-blur-xl border border-yellow-500/50 rounded-full px-5 py-2.5 shadow-xl shadow-yellow-500/30 transition-all duration-300 group cursor-default">
+      <div className="flex items-center space-x-2.5">
+        <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full animate-pulse" />
+        <div className="text-sm">
+          <p className="text-yellow-200 font-semibold">Not Connected</p>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {/* Connected but not Initialized */}
+  {isConnected && !initialized && (
+    <div className="bg-gradient-to-r from-blue-800/90 to-blue-700/90 backdrop-blur-xl border border-blue-500/50 rounded-full px-5 py-2.5 shadow-xl shadow-blue-500/30 transition-all duration-300 group cursor-default">
+      <div className="flex items-center space-x-2.5">
+        <div className="w-2.5 h-2.5 bg-blue-400 rounded-full animate-pulse" />
+        <div className="text-sm">
+          <p className="text-blue-200 font-semibold">Initialize Nexus</p>
+        </div>
+      </div>
+    </div>
+  )}
+
+</div>
       {/* Content */}
       <div className="relative z-10">
         <Navbar activeTab="create" onTabChange={() => {}} />
@@ -624,19 +652,10 @@ setTimeout(() => {
                   </div>
                 )}
 
-                {/* NFT Preview */}
-                <div className="mt-8">
-                  <label className="block text-white font-medium mb-2">
-                    NFT Preview
-                  </label>
-                  <div className="w-full h-48 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-lg border border-white/20 flex items-center justify-center">
-                    <span className="text-white/50">
-                      NFT preview will appear here
-                    </span>
-                  </div>
-                </div>
+                
               </div>
             </div>
+            
 
             {/* Requirements */}
             <div className="mt-8 p-6 bg-white/5 border border-white/20 rounded-lg backdrop-blur-sm">
@@ -686,126 +705,98 @@ setTimeout(() => {
             </div>
 
             {/* Action Buttons */}
-            <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-              {/* Approve Button */}
-              <div className="relative inline-flex group">
-                <div
-                  className={`absolute transition-all duration-1000 opacity-70 -inset-px rounded-xl blur-lg group-hover:opacity-100 group-hover:-inset-1 group-hover:duration-200 ${
-                    isConnected && auctionForm.nftContract && !isApproving
-                      ? "bg-gradient-to-r from-blue-500 via-purple-500 to-blue-500"
-                      : "bg-gradient-to-r from-gray-600 via-gray-500 to-gray-600"
-                  }`}
-                ></div>
-                <button
-                  onClick={handleApproveNFT}
-                  disabled={
-                    !isConnected || !auctionForm.nftContract || isApproving
-                  }
-                  className={`relative inline-flex items-center justify-center px-8 py-3 text-sm font-bold duration-200 rounded-xl border ${
-                    isConnected && auctionForm.nftContract && !isApproving
-                      ? "text-white bg-black border-white/20 hover:bg-black/90"
-                      : "text-white/50 bg-black/50 border-white/10 cursor-not-allowed"
-                  }`}
-                >
-                  {isApproving ? (
-                    <>
-                      <svg
-                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Approving...
-                    </>
-                  ) : (
-                    "Approve NFT Contract"
-                  )}
-                </button>
-              </div>
+<div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
 
-              {/* Create Button */}
-              <div className="relative inline-flex group">
-                <div
-                  className={`absolute transition-all duration-1000 opacity-70 -inset-px rounded-xl blur-lg group-hover:opacity-100 group-hover:-inset-1 group-hover:duration-200 ${
-                    isConnected && initialized && !isCreating
-                      ? "bg-gradient-to-r from-white via-gray-300 to-white"
-                      : "bg-gradient-to-r from-gray-600 via-gray-500 to-gray-600"
-                  }`}
-                ></div>
-                <button
-                  onClick={handleCreateAuction}
-                  disabled={!isConnected || !initialized || isCreating}
-                  className={`relative inline-flex items-center justify-center px-12 py-4 text-lg font-bold duration-200 rounded-xl border ${
-                    isConnected && initialized && !isCreating
-                      ? "text-white bg-black border-white/20 hover:bg-black/90"
-                      : "text-white/50 bg-black/50 border-white/10 cursor-not-allowed"
-                  }`}
-                >
-                  {isCreating ? (
-                    <>
-                      <svg
-                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Creating Auction...
-                    </>
-                  ) : !isConnected ? (
-                    "Connect Wallet First"
-                  ) : !initialized ? (
-                    "Initialize Nexus First"
-                  ) : (
-                    "Create Auction"
-                  )}
-                </button>
-              </div>
-            </div>
+  {/* Approve Button */}
+  <button
+    onClick={handleApproveNFT}
+    disabled={!isConnected || !auctionForm.nftContract || isApproving}
+    className={`relative group px-10 py-3 rounded-xl font-bold overflow-hidden cursor-pointer border border-gray-400/30 transition-all duration-300 transform ${
+      isConnected && auctionForm.nftContract && !isApproving
+        ? "bg-gradient-to-r from-black via-gray-900/45 to-gray-600/30 text-white hover:from-black hover:via-black hover:to-black hover:scale-105 shadow-xl shadow-gray-500/50 hover:shadow-2xl hover:shadow-gray-500/70"
+        : "bg-black/50 text-white/50 cursor-not-allowed border-white/10"
+    }`}
+  >
+    <span className="relative z-10 flex items-center justify-center space-x-2">
+      {isApproving ? (
+        <>
+          <svg
+            className="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            ></circle>
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+          Approving...
+        </>
+      ) : (
+        "Approve NFT Contract"
+      )}
+    </span>
+    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+  </button>
 
-            {/* Status Messages */}
-            {!isConnected && (
-              <div className="mt-6 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg backdrop-blur-sm">
-                <p className="text-yellow-300 text-center">
-                  Connect your wallet to create auctions
-                </p>
-              </div>
-            )}
+  {/* Create Auction Button */}
+  <button
+    onClick={handleCreateAuction}
+    disabled={!isConnected || !initialized || isCreating}
+    className={`relative group px-12 py-4 rounded-xl font-bold overflow-hidden cursor-pointer border border-gray-400/30 transition-all duration-300 transform ${
+      isConnected && initialized && !isCreating
+        ? "bg-gradient-to-r from-black via-gray-900/45 to-gray-600/30 text-white hover:from-black hover:via-black hover:to-black hover:scale-105 shadow-xl shadow-gray-500/50 hover:shadow-2xl hover:shadow-gray-500/70"
+        : "bg-black/50 text-white/50 cursor-not-allowed border-white/10"
+    }`}
+  >
+    <span className="relative z-10 flex items-center justify-center space-x-2">
+      {isCreating ? (
+        <>
+          <svg
+            className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+          >
+            <circle
+              className="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              strokeWidth="4"
+            ></circle>
+            <path
+              className="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+          Creating Auction...
+        </>
+      ) : !isConnected ? (
+        "Connect Wallet First"
+      ) : !initialized ? (
+        "Initialize Nexus First"
+      ) : (
+        "Create Auction"
+      )}
+    </span>
+    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+  </button>
+</div>
 
-            {isConnected && !initialized && (
-              <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg backdrop-blur-sm">
-                <p className="text-blue-300 text-center">
-                  Initialize Nexus to enable cross-chain auction creation
-                </p>
-              </div>
-            )}
+
           </div>
         </main>
       </div>
