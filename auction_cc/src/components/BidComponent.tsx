@@ -293,17 +293,19 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
         amountInWei
       );
 
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      await tx.wait();
-      toast.success('Bid placed successfully!');
+      const network = await provider.getNetwork();
+const currentChainId = Number(network.chainId).toString();
 
-       openTxToast(String(selectedChain), tx.hash);
-       
-       openPopup({
-         chainId: String(selectedChain),
-         ...(address && { address }),
-       });
+console.log('Bid transaction sent:', tx.hash);
 
+// Call Blockscout BEFORE waiting (matching your working claimAuction pattern)
+await openTxToast(currentChainId, tx.hash);
+
+// Wait for confirmation
+await tx.wait();
+
+toast.success('Bid placed successfully!');
+      
 
       // Call the parent callback
       await onBidSubmit(amount);
