@@ -337,6 +337,43 @@ export default function MyAuctionsPage() {
     setClaimingAuction(auction.intentId);
 
     try {
+      // STEP 0: Check on-chain status first to avoid revert
+      console.log("[Claim] Step 0: Checking on-chain auction status...");
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const auctionHubContract = getAuctionHubContract(signer);
+      
+      // Get current on-chain status
+      const onChainAuction = await auctionHubContract.getAuction(auction.intentId);
+      const currentStatus = Number(onChainAuction.status);
+      
+      console.log("[Claim] Current on-chain status:", currentStatus, {
+        0: "Created",
+        1: "Active",
+        2: "Finalized",
+        3: "Settled",
+        4: "Claimed",
+        5: "Cancelled"
+      }[currentStatus]);
+
+      // If already claimed, just refresh the UI
+      if (currentStatus === 4) {
+        console.log("[Claim] ⚠️ Auction already claimed on-chain");
+        toast.success("This auction has already been claimed. Refreshing...");
+        await fetchMyAuctions();
+        setClaimingAuction(null);
+        return;
+      }
+
+      // If not settled yet, cannot claim
+      if (currentStatus !== 3) {
+        console.log("[Claim] ⚠️ Auction is not in Settled status yet");
+        toast.error(`Cannot claim: Auction status is ${currentStatus === 2 ? "Finalized (waiting for NFT release)" : "not settled yet"}. Please wait for the keeper to process.`);
+        await fetchMyAuctions();
+        setClaimingAuction(null);
+        return;
+      }
+
       const decimals = 6; // USDC/USDT decimals
       const bidAmount = claim.amount;
       const humanReadableAmount = Number(bidAmount) / 10 ** decimals;
@@ -354,10 +391,8 @@ export default function MyAuctionsPage() {
         sameToken,
       });
 
+      // STEP 1: Call claimAuction on-chain to mark as claimed
       console.log("[Claim] Step 1: Marking auction as claimed on-chain...");
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const auctionHubContract = getAuctionHubContract(signer);
       const currentChainId = Number(
         (await provider.getNetwork()).chainId
       ).toString();
@@ -368,6 +403,15 @@ export default function MyAuctionsPage() {
       await claimTx.wait();
       console.log("[Claim] ✓ Auction marked as claimed on-chain");
 
+      // Immediately update local state to show claimed status
+      setMyAuctions((prevAuctions) =>
+        prevAuctions.map((a) =>
+          a.intentId === auction.intentId
+            ? { ...a, status: 4 } // Set to Claimed immediately
+            : a
+        )
+      );
+
       // CASE 1: Same chain AND same token - No action needed
       if (sameChain && sameToken) {
         console.log(
@@ -377,7 +421,7 @@ export default function MyAuctionsPage() {
         toast.success(
           `Auction claimed! Funds are already on ${claim.preferredChainName} with ${claim.preferredTokenSymbol}.`
         );
-        fetchMyAuctions();
+        setTimeout(() => fetchMyAuctions(), 2000);
         setClaimingAuction(null);
         return;
       }
