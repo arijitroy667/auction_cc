@@ -295,7 +295,9 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
 
       await new Promise(resolve => setTimeout(resolve, 3000));
       await tx.wait();
-      toast.success('Bid placed successfully!');
+    toast.success('Bid placed successfully!', {
+      duration: 3000,
+    });
 
        openTxToast(String(selectedChain), tx.hash);
        
@@ -346,6 +348,7 @@ export default function BidForm({ auctionId, startingPrice, reservePrice, onBidS
           <h3 className="text-xl font-bold text-white">Place Bid</h3>
           <button onClick={onClose} className="text-zinc-400 hover:text-white text-2xl">×</button>
         </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Bid Range Display */}
           <div className="bg-purple-500/10 rounded-lg p-4 border border-purple-500/30">
