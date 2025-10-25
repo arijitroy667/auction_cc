@@ -40,7 +40,7 @@ function getChainConfig(chainIdentifier: string | number) {
 
 const TOKEN_ADDRESS_TO_SYMBOL: { [chainId: number]: { [address: string]: string } } = {
     11155111: { // Ethereum Sepolia
-        '0xf08A50178dfcDe18524640EA6618a1f965821715': 'USDC',
+        '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238': 'USDC',
         '0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0': 'USDT',
     },
     421614: { // Arbitrum Sepolia
@@ -364,9 +364,67 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
 
         // Release the winning bid from BidManager
         console.log(`   - Releasing winning bid from BidManager on ${winner.sourceChain}...`);
-        const releaseTx = await bidManager.releaseWinningBid(intentId, winner.bidder, auction.seller);
-        await releaseTx.wait();
-        console.log(`   - ✅ Winning bid released to seller on ${winnerChainConfig.name}. Tx: ${releaseTx.hash}`);
+        console.log(`   - 🔍 DEBUG: Release parameters:`);
+        console.log(`   -   intentId: ${intentId}`);
+        console.log(`   -   winner: ${winner.bidder}`);
+        console.log(`   -   seller: ${auction.seller}`);
+        console.log(`   -   BidManager address: ${winnerChainConfig.bidManagerAddress}`);
+        console.log(`   -   Chain: ${winnerChainConfig.name} (${winnerChainConfig.id})`);
+        
+        // Check the locked bid in the contract
+        try {
+            const lockedBid = await bidManager.lockedBids(intentId, winner.bidder);
+            console.log(`   - 🔍 Locked bid in contract:`);
+            console.log(`   -   Amount: ${lockedBid.amount.toString()}`);
+            console.log(`   -   Token: ${lockedBid.token}`);
+            console.log(`   -   Settled: ${lockedBid.settled}`);
+            console.log(`   -   Bidder: ${lockedBid.bidder}`);
+            
+            if (lockedBid.amount.toString() === '0') {
+                throw new Error(`No bid found in BidManager contract for winner ${winner.bidder}. The bid may not have been placed correctly.`);
+            }
+            
+            if (lockedBid.settled) {
+                throw new Error(`Bid already settled in contract!`);
+            }
+            
+            // Check token balance
+            const tokenContract = new ethers.Contract(
+                lockedBid.token,
+                ['function balanceOf(address) view returns (uint256)'],
+                sourceProvider
+            );
+            const bidManagerBalance = await tokenContract.balanceOf(winnerChainConfig.bidManagerAddress);
+            console.log(`   - 🔍 BidManager token balance: ${bidManagerBalance.toString()}`);
+            console.log(`   - 🔍 Required amount: ${lockedBid.amount.toString()}`);
+            
+            if (bidManagerBalance < lockedBid.amount) {
+                console.error(`   - ⚠️  CRITICAL: BidManager has insufficient balance!`);
+                console.error(`   -   Has: ${bidManagerBalance.toString()}`);
+                console.error(`   -   Needs: ${lockedBid.amount.toString()}`);
+                console.error(`   -   Shortfall: ${(lockedBid.amount - bidManagerBalance).toString()}`);
+                throw new Error(`BidManager has insufficient token balance to release winning bid`);
+            }
+            
+        } catch (bidCheckError: any) {
+            console.error(`   - ❌ Failed to check locked bid:`, bidCheckError.message);
+            throw bidCheckError;
+        }
+        
+        try {
+            const releaseTx = await bidManager.releaseWinningBid(intentId, winner.bidder, auction.seller);
+            await releaseTx.wait();
+            console.log(`   - ✅ Winning bid released to seller on ${winnerChainConfig.name}. Tx: ${releaseTx.hash}`);
+        } catch (releaseError: any) {
+            console.error(`   - ❌ FAILED to release winning bid:`);
+            console.error(`   -   Error: ${releaseError.message}`);
+            console.error(`   -   Error code: ${releaseError.code}`);
+            console.error(`   -   Error data: ${releaseError.data}`);
+            if (releaseError.error) {
+                console.error(`   -   Inner error: ${releaseError.error.message || releaseError.error}`);
+            }
+            throw releaseError;
+        }
 
         const winnerTokenAddress = winner.token;
         const requiredTokenAddress = auction.preferdToken;

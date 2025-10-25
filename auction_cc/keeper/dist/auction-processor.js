@@ -39,7 +39,7 @@ function getChainConfig(chainIdentifier) {
 }
 const TOKEN_ADDRESS_TO_SYMBOL = {
     11155111: {
-        '0xf08A50178dfcDe18524640EA6618a1f965821715': 'USDC',
+        '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238': 'USDC',
         '0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0': 'USDT',
     },
     421614: {
