@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useChainId } from "wagmi";
 import { isInitialized } from "@/lib/nexus/nexusClient";
 import { useNotification } from "@blockscout/app-sdk";
 import Navbar from "@/components/navbar";
@@ -132,6 +132,14 @@ const CHAIN_NAMES: { [key: string]: string } = {
   optimism: "Optimism Sepolia",
 };
 
+// Map chain names to chain IDs
+const CHAIN_NAME_TO_ID: { [key: string]: number } = {
+  ethereum: 11155111,
+  arbitrumSepolia: 421614,
+  base: 84532,
+  optimism: 11155420,
+};
+
 const STATUS_NAMES = {
   0: "Created",
   1: "Active",
@@ -143,6 +151,7 @@ const STATUS_NAMES = {
 
 export default function MyAuctionsPage() {
   const { isConnected, address } = useAccount();
+  const currentChainId = useChainId();
   const [initialized, setInitialized] = useState(isInitialized());
   const [myAuctions, setMyAuctions] = useState<Auction[]>([]);
   const [auctionBids, setAuctionBids] = useState<{ [key: string]: Bid[] }>({});
@@ -352,6 +361,22 @@ export default function MyAuctionsPage() {
     if (!initialized) {
       toast.error(
         "Please initialize Nexus first to enable cross-chain operations"
+      );
+      return;
+    }
+
+    // Validate that user is on the correct chain (auction's source chain)
+    const requiredChainId = CHAIN_NAME_TO_ID[auction.sourceChain];
+    if (!requiredChainId) {
+      toast.error(`Unknown chain: ${auction.sourceChain}`);
+      return;
+    }
+
+    if (currentChainId !== requiredChainId) {
+      const requiredChainName = CHAIN_NAMES[auction.sourceChain] || auction.sourceChain;
+      toast.error(
+        `Wrong network! Please switch to ${requiredChainName} to claim tokens from this auction.`,
+        { duration: 5000 }
       );
       return;
     }
@@ -1069,6 +1094,11 @@ export default function MyAuctionsPage() {
                                 claim.currentTokenSymbol ===
                                 claim.preferredTokenSymbol;
 
+                              // Check if user is on the correct chain
+                              const requiredChainId = CHAIN_NAME_TO_ID[auction.sourceChain];
+                              const isOnCorrectChain = currentChainId === requiredChainId;
+                              const requiredChainName = CHAIN_NAMES[auction.sourceChain] || auction.sourceChain;
+
                               // Case 1: Same chain AND same token - Hide button, show message instead
                               if (sameChain && sameToken) {
                                 return (
@@ -1098,11 +1128,21 @@ export default function MyAuctionsPage() {
 
                               return (
                                 <div className="space-y-2">
+                                  {/* Chain warning message */}
+                                  {!isOnCorrectChain && (
+                                    <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-2">
+                                      <p className="text-xs text-yellow-300 text-center">
+                                        ⚠️ Switch to {requiredChainName} to claim
+                                      </p>
+                                    </div>
+                                  )}
+                                  
                                   <button
                                     onClick={() => handleClaim(auction)}
                                     disabled={
                                       claimingAuction === auction.intentId ||
-                                      !initialized
+                                      !initialized ||
+                                      !isOnCorrectChain
                                     }
                                     className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                                   >
