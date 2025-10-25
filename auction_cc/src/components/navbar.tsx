@@ -237,7 +237,6 @@ export default function Navbar({
                   View Balance
                 </button>
               )}
-
               {/* Balance Display */}
               {balance && (
                 <button

@@ -10,7 +10,7 @@ library AuctionTypes {
     /**
      * @dev Enum representing the different states of an auction
      */
-    enum AuctionStatus {
+  enum AuctionStatus {
         Created,
         Active,
         Finalized,
@@ -43,7 +43,7 @@ library AuctionTypes {
         uint256 reservePrice;
         uint256 deadline;
         address preferdToken;
-        uint8 preferdChain;
+        uint256 preferdChain;
         address highestBidder;
         uint256 highestBid;
         AuctionStatus status;
@@ -57,8 +57,9 @@ library AuctionTypes {
      * @param amount Amount of tokens bid
      * @param timestamp Unix timestamp when the bid was placed
      * @param settled Whether the bid has been settled/processed
-     * @param sourceChain Chain ID where the bid was placed (locked after first bid)
      */
+     
+     
     struct Bid {
         bytes32 intentId;
         address bidder;
@@ -66,6 +67,5 @@ library AuctionTypes {
         uint256 amount;
         uint256 timestamp;
         bool settled;
-        uint8 sourceChain;
     }
 }
