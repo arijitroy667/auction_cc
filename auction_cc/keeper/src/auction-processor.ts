@@ -329,6 +329,12 @@ async function settleCrossChainAuction(intentId: string, auction: any, winner: a
             }
         }
         
+        // If no preferred chain is set, default to the source chain (same-chain auction)
+        if (!targetChainConfig) {
+            console.log(`   - No preferred chain specified, defaulting to source chain for same-chain auction`);
+            targetChainConfig = sourceChainConfig;
+        }
+        
         const targetConfig = targetChainConfig;
         const targetChain = targetConfig;
         
