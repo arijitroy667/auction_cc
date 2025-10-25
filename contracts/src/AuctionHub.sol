@@ -22,11 +22,12 @@ contract AuctionHub {
     event AuctionCancelled(bytes32 indexed intentId);
     event AuctionSettled(bytes32 indexed intentId , address indexed winner, uint256 winningBid);
     event NFTtransferred(bytes32 indexed intentId, address indexed winner, uint256 tokenId);
+    event AuctionClaimed(bytes32 indexed intentId);
 
     mapping(bytes32 => AuctionTypes.Auction) public auctions;
     mapping(bytes32 => AuctionTypes.Bid[]) public auctionBids;
     mapping(address => bytes32[]) public sellerAuctions;
-    uint256[] public allIntentsIds;
+    bytes32[] public allIntentsIds;
     address public owner;
     address public keeper;
 
@@ -80,7 +81,7 @@ contract AuctionHub {
         });
 
         sellerAuctions[msg.sender].push(intentId);
-        allIntentsIds.push(uint256(intentId));
+        allIntentsIds.push(bytes32(intentId));
 
         emit AuctionCreated(intentId, msg.sender, nftContract, tokenId, startingPrice, reservePrice, deadline, preferdToken, preferdChain);
 
@@ -98,6 +99,16 @@ contract AuctionHub {
         IERC721(auction.nftContract).transferFrom(address(this), auction.seller, auction.tokenId);
 
         emit AuctionCancelled(intentId);
+    }
+
+    function claimAuction(bytes32 intentId) external {
+        AuctionTypes.Auction storage auction = auctions[intentId];
+        require(auction.seller == msg.sender, "Not the seller");
+        require(auction.status == AuctionTypes.AuctionStatus.Settled, "Auction not settled");
+
+        auction.status = AuctionTypes.AuctionStatus.Claimed;
+
+        emit AuctionClaimed(intentId);
     }
 
 
@@ -152,7 +163,11 @@ contract AuctionHub {
         return sellerAuctions[seller];
     }
 
-    function getAllIntentIds() external view returns (uint256[] memory) {
+    function getAllIntentIds() external view returns (bytes32[] memory) {
         return allIntentsIds;
     }
+    
+    function getAuctionStatus(bytes32 intentId) external view returns (AuctionTypes.AuctionStatus) {
+        return auctions[intentId].status;
+    } 
 }

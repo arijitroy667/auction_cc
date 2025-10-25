@@ -10,11 +10,12 @@ library AuctionTypes {
     /**
      * @dev Enum representing the different states of an auction
      */
-    enum AuctionStatus {
+  enum AuctionStatus {
         Created,
         Active,
         Finalized,
         Settled,
+        Claimed,
         Cancelled
     }
 
