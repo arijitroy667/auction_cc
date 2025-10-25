@@ -192,7 +192,7 @@ const handleBidSubmit = async (amount: string) => {
             const deadline = parseInt(auction.deadline);
             const auctionEnded = deadline <= now || auction.status !== 0;
             const isWinner = auctionEnded && highestBidder === address.toLowerCase();
-            const isRefunded = auctionEnded && !isWinner && auction.status === 3;
+            const isRefunded = auctionEnded && !isWinner && auction.status === 4;
 
             userBids.push({
               auction,

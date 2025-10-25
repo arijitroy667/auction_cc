@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useChainId } from "wagmi";
 import { isInitialized } from "@/lib/nexus/nexusClient";
 import { useNotification } from "@blockscout/app-sdk";
 import Navbar from "@/components/navbar";
@@ -132,6 +132,14 @@ const CHAIN_NAMES: { [key: string]: string } = {
   optimism: "Optimism Sepolia",
 };
 
+// Map chain names to chain IDs
+const CHAIN_NAME_TO_ID: { [key: string]: number } = {
+  ethereum: 11155111,
+  arbitrumSepolia: 421614,
+  base: 84532,
+  optimism: 11155420,
+};
+
 const STATUS_NAMES = {
   0: "Created",
   1: "Active",
@@ -143,6 +151,7 @@ const STATUS_NAMES = {
 
 export default function MyAuctionsPage() {
   const { isConnected, address } = useAccount();
+  const currentChainId = useChainId();
   const [initialized, setInitialized] = useState(isInitialized());
   const [myAuctions, setMyAuctions] = useState<Auction[]>([]);
   const [auctionBids, setAuctionBids] = useState<{ [key: string]: Bid[] }>({});
@@ -152,6 +161,7 @@ export default function MyAuctionsPage() {
   const [selectedAuction, setSelectedAuction] = useState<Auction | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [pendingClaims, setPendingClaims] = useState<{ [intentId: string]: any }>({});
+  const [locallyClaimedAuctions, setLocallyClaimedAuctions] = useState<Set<string>>(new Set());
   const { openTxToast } = useNotification();
 
   // Check for Nexus initialization status changes
@@ -167,6 +177,34 @@ export default function MyAuctionsPage() {
     const interval = setInterval(checkInitialization, 1000);
     return () => clearInterval(interval);
   }, [initialized]);
+
+  // Load locally claimed auctions from localStorage on mount
+  useEffect(() => {
+    try {
+      const storedClaims = localStorage.getItem('claimedAuctions');
+      if (storedClaims) {
+        const claimsArray = JSON.parse(storedClaims);
+        setLocallyClaimedAuctions(new Set(claimsArray));
+      }
+    } catch (error) {
+      console.error("Error loading claimed auctions from localStorage:", error);
+    }
+  }, []);
+
+  // Helper function to mark auction as claimed in localStorage
+  const markAuctionAsClaimed = (intentId: string) => {
+    try {
+      const newClaimedSet = new Set(locallyClaimedAuctions);
+      newClaimedSet.add(intentId);
+      setLocallyClaimedAuctions(newClaimedSet);
+      
+      // Save to localStorage
+      localStorage.setItem('claimedAuctions', JSON.stringify(Array.from(newClaimedSet)));
+      console.log(`[LocalStorage] Marked auction ${intentId} as claimed`);
+    } catch (error) {
+      console.error("Error saving to localStorage:", error);
+    }
+  };
 
   const fetchMyAuctions = async () => {
     if (!address) return;
@@ -327,6 +365,22 @@ export default function MyAuctionsPage() {
       return;
     }
 
+    // Validate that user is on the correct chain (auction's source chain)
+    const requiredChainId = CHAIN_NAME_TO_ID[auction.sourceChain];
+    if (!requiredChainId) {
+      toast.error(`Unknown chain: ${auction.sourceChain}`);
+      return;
+    }
+
+    if (currentChainId !== requiredChainId) {
+      const requiredChainName = CHAIN_NAMES[auction.sourceChain] || auction.sourceChain;
+      toast.error(
+        `Wrong network! Please switch to ${requiredChainName} to claim tokens from this auction.`,
+        { duration: 5000 }
+      );
+      return;
+    }
+
     const bids = auctionBids[auction.intentId] || [];
     const claim = detectPendingClaim(auction, bids, address);
 
@@ -337,6 +391,43 @@ export default function MyAuctionsPage() {
     setClaimingAuction(auction.intentId);
 
     try {
+      // STEP 0: Check on-chain status first to avoid revert
+      console.log("[Claim] Step 0: Checking on-chain auction status...");
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const auctionHubContract = getAuctionHubContract(signer);
+      
+      // Get current on-chain status
+      const onChainAuction = await auctionHubContract.getAuction(auction.intentId);
+      const currentStatus = Number(onChainAuction.status);
+      
+      console.log("[Claim] Current on-chain status:", currentStatus, {
+        0: "Created",
+        1: "Active",
+        2: "Finalized",
+        3: "Settled",
+        4: "Claimed",
+        5: "Cancelled"
+      }[currentStatus]);
+
+      // If already claimed, just refresh the UI
+      if (currentStatus === 4) {
+        console.log("[Claim] ⚠️ Auction already claimed on-chain");
+        toast.success("This auction has already been claimed. Refreshing...");
+        await fetchMyAuctions();
+        setClaimingAuction(null);
+        return;
+      }
+
+      // If not settled yet, cannot claim
+      if (currentStatus !== 3) {
+        console.log("[Claim] ⚠️ Auction is not in Settled status yet");
+        toast.error(`Cannot claim: Auction status is ${currentStatus === 2 ? "Finalized (waiting for NFT release)" : "not settled yet"}. Please wait for the keeper to process.`);
+        await fetchMyAuctions();
+        setClaimingAuction(null);
+        return;
+      }
+
       const decimals = 6; // USDC/USDT decimals
       const bidAmount = claim.amount;
       const humanReadableAmount = Number(bidAmount) / 10 ** decimals;
@@ -354,10 +445,8 @@ export default function MyAuctionsPage() {
         sameToken,
       });
 
+      // STEP 1: Call claimAuction on-chain to mark as claimed
       console.log("[Claim] Step 1: Marking auction as claimed on-chain...");
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const auctionHubContract = getAuctionHubContract(signer);
       const currentChainId = Number(
         (await provider.getNetwork()).chainId
       ).toString();
@@ -368,6 +457,18 @@ export default function MyAuctionsPage() {
       await claimTx.wait();
       console.log("[Claim] ✓ Auction marked as claimed on-chain");
 
+      // Immediately save to localStorage and update local state
+      markAuctionAsClaimed(auction.intentId);
+
+      // Immediately update local state to show claimed status
+      setMyAuctions((prevAuctions) =>
+        prevAuctions.map((a) =>
+          a.intentId === auction.intentId
+            ? { ...a, status: 4 } // Set to Claimed immediately
+            : a
+        )
+      );
+
       // CASE 1: Same chain AND same token - No action needed
       if (sameChain && sameToken) {
         console.log(
@@ -377,7 +478,7 @@ export default function MyAuctionsPage() {
         toast.success(
           `Auction claimed! Funds are already on ${claim.preferredChainName} with ${claim.preferredTokenSymbol}.`
         );
-        fetchMyAuctions();
+        setTimeout(() => fetchMyAuctions(), 2000);
         setClaimingAuction(null);
         return;
       }
@@ -642,7 +743,24 @@ export default function MyAuctionsPage() {
     }
     
     setPendingClaims(claimsMap);
-  }, [myAuctions, auctionBids, address]);
+
+    // Clean up localStorage: remove auctions that are now showing as Claimed (status 4) on-chain
+    const currentClaimedSet = new Set(locallyClaimedAuctions);
+    let hasChanges = false;
+    
+    for (const auction of myAuctions) {
+      if (auction.status === 4 && currentClaimedSet.has(auction.intentId)) {
+        currentClaimedSet.delete(auction.intentId);
+        hasChanges = true;
+        console.log(`[LocalStorage] Removed claimed auction ${auction.intentId} (now confirmed on-chain)`);
+      }
+    }
+    
+    if (hasChanges) {
+      setLocallyClaimedAuctions(currentClaimedSet);
+      localStorage.setItem('claimedAuctions', JSON.stringify(Array.from(currentClaimedSet)));
+    }
+  }, [myAuctions, auctionBids, address, locallyClaimedAuctions]);
 
   const formatTimeLeft = (deadline: string) => {
     const now = Math.floor(Date.now() / 1000);
@@ -964,6 +1082,7 @@ export default function MyAuctionsPage() {
                           {/* Claim Button for Settled Auctions */}
                           {auction.status === 3 &&
                             address &&
+                            !locallyClaimedAuctions.has(auction.intentId) &&
                             (() => {
                               const claim = pendingClaims[auction.intentId];
 
@@ -974,6 +1093,11 @@ export default function MyAuctionsPage() {
                               const sameToken =
                                 claim.currentTokenSymbol ===
                                 claim.preferredTokenSymbol;
+
+                              // Check if user is on the correct chain
+                              const requiredChainId = CHAIN_NAME_TO_ID[auction.sourceChain];
+                              const isOnCorrectChain = currentChainId === requiredChainId;
+                              const requiredChainName = CHAIN_NAMES[auction.sourceChain] || auction.sourceChain;
 
                               // Case 1: Same chain AND same token - Hide button, show message instead
                               if (sameChain && sameToken) {
@@ -1004,11 +1128,21 @@ export default function MyAuctionsPage() {
 
                               return (
                                 <div className="space-y-2">
+                                  {/* Chain warning message */}
+                                  {!isOnCorrectChain && (
+                                    <div className="bg-yellow-500/20 border border-yellow-500/30 rounded-lg p-2">
+                                      <p className="text-xs text-yellow-300 text-center">
+                                        ⚠️ Switch to {requiredChainName} to claim
+                                      </p>
+                                    </div>
+                                  )}
+                                  
                                   <button
                                     onClick={() => handleClaim(auction)}
                                     disabled={
                                       claimingAuction === auction.intentId ||
-                                      !initialized
+                                      !initialized ||
+                                      !isOnCorrectChain
                                     }
                                     className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
                                   >

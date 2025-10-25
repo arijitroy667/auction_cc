@@ -151,6 +151,19 @@ export class AuctionHubContract {
       throw error;
     }
   }
+
+  /**
+   * Gets auction status by intent ID
+   */
+  async getAuctionStatus(intentId: string): Promise<number> {
+    try {
+      const status = await this.contract.getAuctionStatus(intentId);
+      return Number(status);
+    } catch (error) {
+      console.error('Error fetching auction status:', error);
+      throw error;
+    }
+  }
 }
 
 /**
