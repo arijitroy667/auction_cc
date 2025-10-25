@@ -3,14 +3,14 @@
 import { useState, useEffect } from "react";
 import { useAccount, useWalletClient, useChainId } from "wagmi";
 import { isInitialized } from "@/lib/nexus/nexusClient";
-import { useNotification } from '@blockscout/app-sdk';
+import { useNotification } from "@blockscout/app-sdk";
 import Navbar from "@/components/navbar";
 import Link from "next/link";
 import { ethers } from "ethers";
 import { getAuctionHubContract } from "@/lib/auctionHub";
 import { useRouter } from "next/navigation";
 import NFTSelector from "@/components/NFTSelector";
-import { toast, Toaster } from 'react-hot-toast';
+import { toast, Toaster } from "react-hot-toast";
 
 import {
   SUPPORTED_TOKENS,
@@ -56,7 +56,7 @@ export default function CreateAuctionPage() {
   }, [initialized]);
 
   const truncateError = (msg: string, maxLength = 80) => {
-  return msg.length > maxLength ? msg.slice(0, maxLength) + '...' : msg;
+    return msg.length > maxLength ? msg.slice(0, maxLength) + "..." : msg;
   };
 
   // Handler for NFT selection
@@ -70,7 +70,9 @@ export default function CreateAuctionPage() {
 
   const handleApproveNFT = async () => {
     if (!isConnected || !auctionForm.nftContract || !walletClient) {
-      toast.error("Please connect your wallet and enter NFT contract address first");
+      toast.error(
+        "Please connect your wallet and enter NFT contract address first"
+      );
       return;
     }
 
@@ -78,7 +80,9 @@ export default function CreateAuctionPage() {
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
-      const currentChainId = Number((await provider.getNetwork()).chainId).toString();
+      const currentChainId = Number(
+        (await provider.getNetwork()).chainId
+      ).toString();
 
       // ERC721 ABI for approve and setApprovalForAll
       const erc721ABI = [
@@ -111,7 +115,9 @@ export default function CreateAuctionPage() {
       await openTxToast(currentChainId, tx.hash);
       await tx.wait();
 
-      toast.success("NFT contract approved successfully! You can now create auctions.");
+      toast.success(
+        "NFT contract approved successfully! You can now create auctions."
+      );
     } catch (error: unknown) {
       console.error("Error approving NFT:", error);
       const errorMessage =
@@ -192,7 +198,12 @@ export default function CreateAuctionPage() {
       try {
         const owner = await nftContract.ownerOf(auctionForm.tokenId);
         if (owner.toLowerCase() !== userAddress.toLowerCase()) {
-          toast.error(`You don't own this NFT. Owner: ${owner.slice(0, 6)}...${owner.slice(-4)}`);
+          toast.error(
+            `You don't own this NFT. Owner: ${owner.slice(
+              0,
+              6
+            )}...${owner.slice(-4)}`
+          );
           return;
         }
       } catch (error) {
@@ -237,14 +248,19 @@ export default function CreateAuctionPage() {
       const intentId = await auctionHubContract.createAuction(params);
 
       // Show success message with options
-     // Replace the confirm dialog with this:
-toast.success(`Auction created! ID: ${intentId.slice(0, 10)}...`, { duration: 3000 });
-toast(`Redirecting to "My Auctions" page...`, { duration: 4000, icon: 'ℹ️' });
+      // Replace the confirm dialog with this:
+      toast.success(`Auction created! ID: ${intentId.slice(0, 10)}...`, {
+        duration: 3000,
+      });
+      toast(`Redirecting to "My Auctions" page...`, {
+        duration: 4000,
+        icon: "ℹ️",
+      });
 
-// Automatically navigate after showing the messages
-setTimeout(() => {
-  router.push("/my_auctions?from=create");
-}, 4500);
+      // Automatically navigate after showing the messages
+      setTimeout(() => {
+        router.push("/my_auctions?from=create");
+      }, 4500);
 
       console.log("Auction created with Intent ID:", intentId);
 
@@ -270,61 +286,59 @@ setTimeout(() => {
 
   return (
     <div className="relative min-h-screen w-full bg-black">
-       <Toaster
-      position="top-right"
-      toastOptions={{
-        duration: 4000,
-        style: {
-          background: '#1a1a1a',
-          color: '#fff',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-        },
-        success: {
-          iconTheme: {
-            primary: '#10b981',
-            secondary: '#fff',
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: "#1a1a1a",
+            color: "#fff",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
           },
-        },
-        error: {
-          iconTheme: {
-            primary: '#ef4444',
-            secondary: '#fff',
+          success: {
+            iconTheme: {
+              primary: "#10b981",
+              secondary: "#fff",
+            },
           },
-        },
-      }}
-    />
-    
+          error: {
+            iconTheme: {
+              primary: "#ef4444",
+              secondary: "#fff",
+            },
+          },
+        }}
+      />
+
       {/* Background Grid */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,#4f4f4f2e_1px,transparent_1px),linear-gradient(to_bottom,#8080800a_1px,transparent_1px)] bg-[size:14px_24px]"></div>
-{/* Status messages */}
-            {/* Fixed Status Indicator - Top Right */}
-<div className="fixed top-20 right-6 z-50 ">
+      {/* Status messages */}
+      {/* Fixed Status Indicator - Top Right */}
+      <div className="fixed top-20 right-6 z-50 ">
+        {/* Not Connected */}
+        {!isConnected && (
+          <div className="bg-gradient-to-r from-yellow-800/90 to-yellow-700/90 backdrop-blur-xl border border-yellow-500/50 rounded-full px-5 py-2.5 shadow-xl shadow-yellow-500/30 transition-all duration-300 group cursor-default">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full animate-pulse" />
+              <div className="text-sm">
+                <p className="text-yellow-200 font-semibold">Not Connected</p>
+              </div>
+            </div>
+          </div>
+        )}
 
-  {/* Not Connected */}
-  {!isConnected && (
-    <div className="bg-gradient-to-r from-yellow-800/90 to-yellow-700/90 backdrop-blur-xl border border-yellow-500/50 rounded-full px-5 py-2.5 shadow-xl shadow-yellow-500/30 transition-all duration-300 group cursor-default">
-      <div className="flex items-center space-x-2.5">
-        <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full animate-pulse" />
-        <div className="text-sm">
-          <p className="text-yellow-200 font-semibold">Not Connected</p>
-        </div>
+        {/* Connected but not Initialized */}
+        {isConnected && !initialized && (
+          <div className="bg-gradient-to-r from-blue-800/90 to-blue-700/90 backdrop-blur-xl border border-blue-500/50 rounded-full px-5 py-2.5 shadow-xl shadow-blue-500/30 transition-all duration-300 group cursor-default">
+            <div className="flex items-center space-x-2.5">
+              <div className="w-2.5 h-2.5 bg-blue-400 rounded-full animate-pulse" />
+              <div className="text-sm">
+                <p className="text-blue-200 font-semibold">Initialize Nexus</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
-  )}
-
-  {/* Connected but not Initialized */}
-  {isConnected && !initialized && (
-    <div className="bg-gradient-to-r from-blue-800/90 to-blue-700/90 backdrop-blur-xl border border-blue-500/50 rounded-full px-5 py-2.5 shadow-xl shadow-blue-500/30 transition-all duration-300 group cursor-default">
-      <div className="flex items-center space-x-2.5">
-        <div className="w-2.5 h-2.5 bg-blue-400 rounded-full animate-pulse" />
-        <div className="text-sm">
-          <p className="text-blue-200 font-semibold">Initialize Nexus</p>
-        </div>
-      </div>
-    </div>
-  )}
-
-</div>
       {/* Content */}
       <div className="relative z-10">
         <Navbar activeTab="create" onTabChange={() => {}} />
@@ -378,7 +392,8 @@ setTimeout(() => {
                     </div>
                   )}
                   <p className="text-xs text-zinc-400 mt-2">
-                    Select an NFT from your wallet or enter details manually below
+                    Select an NFT from your wallet or enter details manually
+                    below
                   </p>
                 </div>
 
@@ -651,11 +666,8 @@ setTimeout(() => {
                     </p>
                   </div>
                 )}
-
-                
               </div>
             </div>
-            
 
             {/* Requirements */}
             <div className="mt-8 p-6 bg-white/5 border border-white/20 rounded-lg backdrop-blur-sm">
@@ -705,98 +717,97 @@ setTimeout(() => {
             </div>
 
             {/* Action Buttons */}
-<div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+            <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+              {/* Approve Button */}
+              <button
+                onClick={handleApproveNFT}
+                disabled={
+                  !isConnected || !auctionForm.nftContract || isApproving
+                }
+                className={`relative group px-10 py-3 rounded-xl font-bold overflow-hidden cursor-pointer border border-gray-400/30 transition-all duration-300 transform ${
+                  isConnected && auctionForm.nftContract && !isApproving
+                    ? "bg-gradient-to-r from-black via-gray-900/45 to-gray-600/30 text-white hover:from-black hover:via-black hover:to-black hover:scale-105 shadow-xl shadow-gray-500/50 hover:shadow-2xl hover:shadow-gray-500/70"
+                    : "bg-black/50 text-white/50 cursor-not-allowed border-white/10"
+                }`}
+              >
+                <span className="relative z-10 flex items-center justify-center space-x-2">
+                  {isApproving ? (
+                    <>
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Approving...
+                    </>
+                  ) : (
+                    "Approve NFT Contract"
+                  )}
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+              </button>
 
-  {/* Approve Button */}
-  <button
-    onClick={handleApproveNFT}
-    disabled={!isConnected || !auctionForm.nftContract || isApproving}
-    className={`relative group px-10 py-3 rounded-xl font-bold overflow-hidden cursor-pointer border border-gray-400/30 transition-all duration-300 transform ${
-      isConnected && auctionForm.nftContract && !isApproving
-        ? "bg-gradient-to-r from-black via-gray-900/45 to-gray-600/30 text-white hover:from-black hover:via-black hover:to-black hover:scale-105 shadow-xl shadow-gray-500/50 hover:shadow-2xl hover:shadow-gray-500/70"
-        : "bg-black/50 text-white/50 cursor-not-allowed border-white/10"
-    }`}
-  >
-    <span className="relative z-10 flex items-center justify-center space-x-2">
-      {isApproving ? (
-        <>
-          <svg
-            className="animate-spin -ml-1 mr-2 h-5 w-5 text-white"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            ></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
-          Approving...
-        </>
-      ) : (
-        "Approve NFT Contract"
-      )}
-    </span>
-    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
-  </button>
-
-  {/* Create Auction Button */}
-  <button
-    onClick={handleCreateAuction}
-    disabled={!isConnected || !initialized || isCreating}
-    className={`relative group px-12 py-4 rounded-xl font-bold overflow-hidden cursor-pointer border border-gray-400/30 transition-all duration-300 transform ${
-      isConnected && initialized && !isCreating
-        ? "bg-gradient-to-r from-black via-gray-900/45 to-gray-600/30 text-white hover:from-black hover:via-black hover:to-black hover:scale-105 shadow-xl shadow-gray-500/50 hover:shadow-2xl hover:shadow-gray-500/70"
-        : "bg-black/50 text-white/50 cursor-not-allowed border-white/10"
-    }`}
-  >
-    <span className="relative z-10 flex items-center justify-center space-x-2">
-      {isCreating ? (
-        <>
-          <svg
-            className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              className="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              strokeWidth="4"
-            ></circle>
-            <path
-              className="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
-          Creating Auction...
-        </>
-      ) : !isConnected ? (
-        "Connect Wallet First"
-      ) : !initialized ? (
-        "Initialize Nexus First"
-      ) : (
-        "Create Auction"
-      )}
-    </span>
-    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
-  </button>
-</div>
-
-
+              {/* Create Auction Button */}
+              <button
+                onClick={handleCreateAuction}
+                disabled={!isConnected || !initialized || isCreating}
+                className={`relative group px-12 py-4 rounded-xl font-bold overflow-hidden cursor-pointer border border-gray-400/30 transition-all duration-300 transform ${
+                  isConnected && initialized && !isCreating
+                    ? "bg-gradient-to-r from-black via-gray-900/45 to-gray-600/30 text-white hover:from-black hover:via-black hover:to-black hover:scale-105 shadow-xl shadow-gray-500/50 hover:shadow-2xl hover:shadow-gray-500/70"
+                    : "bg-black/50 text-white/50 cursor-not-allowed border-white/10"
+                }`}
+              >
+                <span className="relative z-10 flex items-center justify-center space-x-2">
+                  {isCreating ? (
+                    <>
+                      <svg
+                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Creating Auction...
+                    </>
+                  ) : !isConnected ? (
+                    "Connect Wallet First"
+                  ) : !initialized ? (
+                    "Initialize Nexus First"
+                  ) : (
+                    "Create Auction"
+                  )}
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-12 translate-x-[-200%] group-hover:translate-x-[200%] transition-transform duration-1000" />
+              </button>
+            </div>
           </div>
         </main>
       </div>
