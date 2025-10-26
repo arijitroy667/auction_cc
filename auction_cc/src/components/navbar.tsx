@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import ConnectWalletButton from "../components/connect-button";
 import {
   initializeWithProvider,
   isInitialized,
 } from "../lib/nexus/nexusClient";
-import {toast, Toaster} from 'react-hot-toast';
+import { toast, Toaster } from "react-hot-toast";
 import { result as fetchUnifiedBalance } from "../components/unified_balance/fetch-unified-balance";
 import { useAccount } from "wagmi";
 
@@ -107,30 +108,30 @@ export default function Navbar({
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50">
-         <Toaster
-            position="top-right"
-            toastOptions={{
-              duration: 4000,
-              style: {
-                background: '#1a1a1a',
-                color: '#fff',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-              },
-              success: {
-                iconTheme: {
-                  primary: '#10b981',
-                  secondary: '#fff',
-                },
-              },
-              error: {
-                iconTheme: {
-                  primary: '#ef4444',
-                  secondary: '#fff',
-                },
-              },
-            }}
-          />
-          
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: "#1a1a1a",
+            color: "#fff",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+          },
+          success: {
+            iconTheme: {
+              primary: "#10b981",
+              secondary: "#fff",
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: "#ef4444",
+              secondary: "#fff",
+            },
+          },
+        }}
+      />
+
       <nav
         className={`relative transition-all duration-300 ${
           scrolled
@@ -143,9 +144,15 @@ export default function Navbar({
             {/* Left - Brand and Navigation */}
             <div className="flex items-center gap-8">
               <Link href="/" className="flex-shrink-0">
-                <h1 className="text-white text-xl font-bold tracking-tight hover:text-blue-400 transition-colors">
-                  XBid
-                </h1>
+                <div className="relative w-32 h-10 transition-transform duration-300 group-hover:scale-105">
+                  <Image
+                    src="/logo.png" // Put your logo in public/logo.png
+                    alt="XBid Logo"
+                    fill
+                    className="object-contain"
+                    priority
+                  />
+                </div>
               </Link>
 
               {/* Navigation Links */}
