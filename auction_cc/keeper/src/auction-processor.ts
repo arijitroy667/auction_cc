@@ -148,6 +148,7 @@ export async function processEndedAuctions() {
     for (const [intentId, auctionData] of allAuctions.entries()) {
         try {
             if (processingLocks.has(intentId)) {
+                console.log(`   - ⏳ Auction ${intentId.slice(0, 10)}... is currently being processed, skipping...`);
                 continue;
             }
 
