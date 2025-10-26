@@ -53,7 +53,7 @@ This approach maximizes liquidity while maintaining security and decentralizatio
 
 ### Creating an Auction
 
-### RECOMMENDATION: USE USDC FOR WHOLE FLOW AS USDT LIQUIDITY IS LOW ON TOKEN CONTRACT ADDRESS PROVIDED BY AVAIL NEXUS. CHECK TOKEN ADDRESSES SUPPORTED NETWORK SECTION.
+### RECOMMENDATION: USE USDC FOR WHOLE FLOW AS USDT LIQUIDITY IS LOW ON TOKEN CONTRACT ADDRESS PROVIDED BY AVAIL NEXUS(TESTNET). CHECK TOKEN ADDRESSES SUPPORTED NETWORK SECTION.
 
 1. **Connect Wallet**: Use RainbowKit to connect MetaMask
 2. **Initialize Nexus**: Click "Initialize Nexus" button (one-time per session)
