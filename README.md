@@ -53,6 +53,8 @@ This approach maximizes liquidity while maintaining security and decentralizatio
 
 ### Creating an Auction
 
+### RECOMMENDATION: USE USDC FOR WHOLE FLOW AS USDT LIQUIDITY IS LOW ON TOKEN CONTRACT ADDRESS PROVIDED BY AVAIL NEXUS. CHECK TOKEN ADDRESSES SUPPORTED NETWORK SECTION.
+
 1. **Connect Wallet**: Use RainbowKit to connect MetaMask
 2. **Initialize Nexus**: Click "Initialize Nexus" button (one-time per session)
 3. **Navigate to Create Auction**
@@ -118,7 +120,7 @@ Our platform leverages **Avail Nexus SDK** for seamless cross-chain interoperabi
 - auction_cc/src/components/bridge: Nexus bridging utilities
 - auction_cc/src/components/transfer: Nexus transfer utilities
 - auction_cc/src/components/unified_balance: Nexus unified balance utilities
-- auction_cc/src/app/my_auctions/page.tsx: Use Nexus bridge and bridgeAndExecute for claiming winning bids
+- auction_cc/src/app/my_auctions/page.tsx: Use of Nexus bridge and bridgeAndExecute for claiming winning bids
 
 ### Key Nexus Features Used
 
@@ -325,14 +327,17 @@ Case 4: Different chain, different token
 
 ## Supported Networks
 
-### Testnets (Current Deployment)
+### Token Addresses on deployed chains:
 
-| Network              | Chain ID | AuctionHub | BidManager | Supported Tokens |
-| -------------------- | -------- | ---------- | ---------- | ---------------- |
-| **Ethereum Sepolia** | 11155111 | ✅         | ✅         | USDC, USDT       |
-| **Arbitrum Sepolia** | 421614   | ✅         | ✅         | USDC, USDT       |
-| **Base Sepolia**     | 84532    | ✅         | ✅         | USDC, USDT       |
-| **Optimism Sepolia** | 11155420 | ✅         | ✅         | USDC, USDT       |
+
+### Testnets (Current Deployment), Token addresses are refered by Avail Nexus docs
+
+| Network              | Chain ID | AuctionHub | BidManager | Supported Tokens | USDC Address | USDT Address
+| -------------------- | -------- | ---------- | ---------- | ---------------- | ---------------- | -------------
+| **Ethereum Sepolia** | 11155111 | ✅         | ✅         | USDC, USDT       | 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238 | 0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0|
+| **Arbitrum Sepolia** | 421614   | ✅         | ✅         | USDC, USDT       | 0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d | 0xb9a4873d8d2C22e56b8574e8605644d08E047434 |
+| **Base Sepolia**     | 84532    | ✅         | ✅         | USDC, USDT       | 0x036CbD53842c5426634e7929541eC2318f3dCF7e | 0xf7e53b20f39a5f8c35005fEf37eef03A7b0d0B5a |
+| **Optimism Sepolia** | 11155420 | ✅         | ✅         | USDC, USDT       | 0x5fd84259d66Cd46123540766Be93DFE6D43130D7 | 0x7F5c764cBc14f9669B88837ca1490cCa17c31607 |
 
 ---
 
