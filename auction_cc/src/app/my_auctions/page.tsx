@@ -191,14 +191,12 @@ export default function MyAuctionsPage() {
     }
   }, []);
 
-  // Helper function to mark auction as claimed in localStorage
   const markAuctionAsClaimed = (intentId: string) => {
     try {
       const newClaimedSet = new Set(locallyClaimedAuctions);
       newClaimedSet.add(intentId);
       setLocallyClaimedAuctions(newClaimedSet);
       
-      // Save to localStorage
       localStorage.setItem('claimedAuctions', JSON.stringify(Array.from(newClaimedSet)));
       console.log(`[LocalStorage] Marked auction ${intentId} as claimed`);
     } catch (error) {
@@ -224,14 +222,12 @@ export default function MyAuctionsPage() {
         await auctionsResponse.json();
 
       if (auctionsData.success) {
-        // Filter auctions by current user
         const userAuctions = auctionsData.data.filter(
           (auction) => auction.seller.toLowerCase() === address.toLowerCase()
         );
 
         setMyAuctions(userAuctions);
 
-        // Fetch bids for each auction
         const bidsPromises = userAuctions.map(async (auction) => {
           try {
             const bidsResponse = await fetch(
@@ -308,11 +304,10 @@ export default function MyAuctionsPage() {
 
       console.log("✅ Auction cancelled:", receipt.hash);
 
-      // Immediately update the local state to show cancelled status
       setMyAuctions((prevAuctions) =>
         prevAuctions.map((a) =>
           a.intentId === auction.intentId
-            ? { ...a, status: 3 } // Set to cancelled immediately
+            ? { ...a, status: 3 } 
             : a
         )
       );
@@ -365,7 +360,6 @@ export default function MyAuctionsPage() {
       return;
     }
 
-    // Validate that user is on the correct chain (auction's source chain)
     const requiredChainId = CHAIN_NAME_TO_ID[auction.sourceChain];
     if (!requiredChainId) {
       toast.error(`Unknown chain: ${auction.sourceChain}`);
@@ -445,7 +439,6 @@ export default function MyAuctionsPage() {
         sameToken,
       });
 
-      // STEP 1: Call claimAuction on-chain to mark as claimed
       console.log("[Claim] Step 1: Marking auction as claimed on-chain...");
       const currentChainId = Number(
         (await provider.getNetwork()).chainId
@@ -457,19 +450,16 @@ export default function MyAuctionsPage() {
       await claimTx.wait();
       console.log("[Claim] ✓ Auction marked as claimed on-chain");
 
-      // Immediately save to localStorage and update local state
       markAuctionAsClaimed(auction.intentId);
 
-      // Immediately update local state to show claimed status
       setMyAuctions((prevAuctions) =>
         prevAuctions.map((a) =>
           a.intentId === auction.intentId
-            ? { ...a, status: 4 } // Set to Claimed immediately
+            ? { ...a, status: 4 } 
             : a
         )
       );
 
-      // CASE 1: Same chain AND same token - No action needed
       if (sameChain && sameToken) {
         console.log(
           "[Claim] ✅ Funds already on correct chain with correct token - no action needed"
@@ -638,7 +628,6 @@ export default function MyAuctionsPage() {
           tokenOut: requiredTokenAddress,
         });
 
-        // For stablecoins, accept 0.5% slippage
         const amountOutMinimum = (bidAmount * BigInt(995)) / BigInt(1000);
 
         const bridgeAndExecuteResult: BridgeAndExecuteResult =
@@ -665,7 +654,7 @@ export default function MyAuctionsPage() {
                 const swapParams = {
                   tokenIn: tokenInOnDestination, // Token address on destination chain after bridge
                   tokenOut: requiredTokenAddress, // Final desired token on destination chain
-                  fee: 500, // 0.05% fee tier for stable coin pairs
+                  fee: 500, 
                   recipient: auction.seller,
                   amountIn: amount,
                   amountOutMinimum: amountOutMinimum.toString(),
@@ -720,7 +709,6 @@ export default function MyAuctionsPage() {
   useEffect(() => {
     if (isConnected && address) {
       fetchMyAuctions();
-      // Auto-refresh every 30 seconds
       const interval = setInterval(fetchMyAuctions, 30000);
       return () => clearInterval(interval);
     }
@@ -733,7 +721,7 @@ export default function MyAuctionsPage() {
     const claimsMap: { [intentId: string]: any } = {};
     
     for (const auction of myAuctions) {
-      if (auction.status === 3) { // Only check settled auctions (status 3 = Settled, not yet claimed)
+      if (auction.status === 3) { 
         const bids = auctionBids[auction.intentId] || [];
         const claim = detectPendingClaim(auction, bids, address);
         if (claim) {
@@ -744,7 +732,6 @@ export default function MyAuctionsPage() {
     
     setPendingClaims(claimsMap);
 
-    // Clean up localStorage: remove auctions that are now showing as Claimed (status 4) on-chain
     const currentClaimedSet = new Set(locallyClaimedAuctions);
     let hasChanges = false;
     
@@ -773,17 +760,14 @@ export default function MyAuctionsPage() {
     const minutes = Math.floor((secondsLeft % 3600) / 60);
     const seconds = secondsLeft % 60;
 
-    // For auctions under 1 hour, show minutes and seconds
     if (hours === 0) {
       return `${minutes}m ${seconds}s`;
     }
 
-    // For longer auctions, show hours and minutes
     if (hours < 24) {
       return `${hours}h ${minutes}m`;
     }
 
-    // For very long auctions, show days
     const days = Math.floor(hours / 24);
     return `${days}d ${hours % 24}h`;
   };
