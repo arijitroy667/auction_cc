@@ -64,7 +64,8 @@ This approach maximizes liquidity while maintaining security and decentralizatio
    - Starting Price: e.g., $100 (must be > reserve)
    - Reserve Price: e.g., $80 (minimum acceptable)
    - Duration: 2 minutes to 7 days
-   - Preferred Token: USDC or USDT
+   - Preferred Token: USDC (recommended) or USDT  
+     _Note: Avail mentors suggest using USDC preferably, as USDT liquidity may be lower across testnets._
    - Preferred Chain: Where you want payment, where you have gas fees
 6. **Approve NFT**: Click "Approve NFT Contract" (one-time per collection)
 7. **Create Auction**: Submit transaction
@@ -85,10 +86,12 @@ This approach maximizes liquidity while maintaining security and decentralizatio
 ### Claiming (After Auction Ends)
 
 **For Winners**:
+
 - All the process are automated , winner will automatically get NFT in their wallet.
 - No action needed
 
 **For Sellers**:
+
 1. Go to "My Auctions"
 2. Find ended auction with "Claim Tokens" button
 3. Click to claim
@@ -98,6 +101,7 @@ This approach maximizes liquidity while maintaining security and decentralizatio
    - All in one transaction via Nexus SDK!
 
 **For Losing Bidders**:
+
 - Refunds processed automatically by keeper
 - Funds returned to original chain
 - No action needed
@@ -116,15 +120,65 @@ Our platform leverages **Avail Nexus SDK** for seamless cross-chain interoperabi
 - auction_cc/src/components/unified_balance: Nexus unified balance utilities
 - auction_cc/src/app/my_auctions/page.tsx: Use Nexus bridge and bridgeAndExecute for claiming winning bids
 
-
 ### Key Nexus Features Used
 
-| Feature | Use Case | Benefit | Why Used |
-|---------|----------|---------|----------|
-| **Unified Balance** | Show total USDC/USDT across all chains | Users see complete liquidity | |
-| **Transfer** | Direct token transfer to auction chain | User can bid to auction on any chain using their preferred chain where they have gas fees | To enable cross-chain bidding |
-| **Bridge** | Move winning bid to seller's chain | Use for cross-chain settlement | When Seller preferdChain != winnerChain but Seller's preferdToken == winnerBidToken |
-| **BridgeAndExecute** | Bridge + Swap in one transaction | Convert USDT→USDC while bridging | When Seller preferdChain != winnerChain and Seller's preferdToken != winnerBidToken |
+| Feature              | Use Case                               | Benefit                                                                                   | Why Used                                                                            |
+| -------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **Unified Balance**  | Show total USDC/USDT across all chains | Users see complete liquidity                                                              |                                                                                     |
+| **Transfer**         | Direct token transfer to auction chain | User can bid to auction on any chain using their preferred chain where they have gas fees | To enable cross-chain bidding                                                       |
+| **Bridge**           | Move winning bid to seller's chain     | Use for cross-chain settlement                                                            | When Seller preferdChain != winnerChain but Seller's preferdToken == winnerBidToken |
+| **BridgeAndExecute** | Bridge + Swap in one transaction       | Convert USDT→USDC while bridging                                                          | When Seller preferdChain != winnerChain and Seller's preferdToken != winnerBidToken |
+
+---
+
+## Blockscout SDK Integration
+
+To enhance **on-chain transparency** and deliver **real-time transaction visibility**, **X-Bid** integrates the **Blockscout SDK** alongside Avail Nexus.  
+All key auction interactions — including NFT approval, bid placement, cancellation, and claim — are now **tracked live within the dApp**, eliminating the need to visit external explorers.
+
+The integration leverages **OpenTxToast** from the Notification Provider to display dynamic, in-app transaction updates (e.g., _Pending → Confirmed → Finalized_), ensuring users receive **instant feedback** on their on-chain actions with direct links to verified Blockscout explorer data.
+
+---
+
+### Unified Transaction Visibility
+
+Blockscout SDK ensures smooth tracking and user confidence for every transaction triggered from the frontend:
+
+| Feature                  | Use Case                                               | Benefit                                     | Why Used                                       |
+| ------------------------ | ------------------------------------------------------ | ------------------------------------------- | ---------------------------------------------- |
+| **Transaction Tracking** | NFT approval, bid placement, cancellation, and claim   | Real-time status (Pending → Confirmed)      | Provides transparency for every auction action |
+| **Explorer Links**       | Directly accessible in UI                              | Easy verification of on-chain transactions  | Improves user trust                            |
+| **Multi-Chain Support**  | Works across all deployed testnets                     | Unified tracking for all auction operations | Enables consistent visibility across chains    |
+| **Live UI Feedback**     | Displays confirmation notifications and explorer links | Seamless UX without manual lookup           | Keeps users informed in-app                    |
+
+---
+
+### Implementation Summary
+
+Blockscout SDK (openTxtoast portion) is integrated into all transaction-heavy frontend modules:
+
+- **NFT Approval** → `create/page.tsx`
+- **Bid Placement** → `components/BidComponent.tsx`
+- **Cancel & Claim Auction** → `my_auctions/page.tsx`
+
+Each transaction hash returned from contract interactions is passed to Blockscout SDK to:
+
+- Fetch real-time confirmation data
+- Display pending/success/failure status
+- Provide direct Blockscout explorer links
+
+### Bid Placement Example with Real-Time Tracking
+
+Here’s a concrete example of integrating **Blockscout SDK** for claim component in `my_auctions/page.tsx`:
+
+```typescript
+const currentChainId = Number((await provider.getNetwork()).chainId).toString(); // user chain id converted to string
+const claimTx = await auctionHubContract.claimAuction(auction.intentId); //transaction portion
+await openTxToast(currentChainId, claimTx.hash); // use of openTxToast with correct arguements
+await claimTx.wait();
+```
+
+**Together with Avail Nexus, Blockscout SDK ensures every bid, claim, and approval on X-Bid is verifiable and auditable — empowering a transparent, multi-chain auction experience.**
 
 ---
 
@@ -142,9 +196,11 @@ contracts/src/
 ```
 
 #### 1. AuctionHub.sol
+
 **Deployed on**: Primary chains (Sepolia, Arbitrum Sepolia, Base Sepolia, Optimism Sepolia)
 
 **Responsibilities**:
+
 - Create auctions with seller-defined parameters
 - Lock NFTs in escrow during auction period
 - Store auction metadata (starting price, reserve price, deadline, preferred token/chain)
@@ -153,9 +209,11 @@ contracts/src/
 - Emit events for keeper monitoring
 
 #### 2. BidManager.sol
+
 **Deployed on**: ALL supported chains (Sepolia, Arbitrum, Optimism, Base)
 
 **Responsibilities**:
+
 - Accept and lock bids from users on any chain
 - Store bid information (amount, token, timestamp)
 - Release funds to seller or refund bidders post-settlement
@@ -179,6 +237,7 @@ keeper/src/
 ```
 
 **Events Monitored**:
+
 - `AuctionCreated` → Store auction metadata
 - `BidPlaced` → Aggregate bids from all chains
 - `AuctionSettled` → Track settlement status
@@ -188,27 +247,32 @@ keeper/src/
 ### Pages & Features
 
 #### 1. Home Page (`/`)
+
 - Connected wallet overview
 - **Unified Balance Display** (Nexus SDK)
 - Quick navigation to create/browse auctions
 - Real-time Nexus initialization status
 
 #### 2. Create Auction (`/create`)
+
 **Innovative Features**:
--  **Visual NFT Selector**: Browse and select NFTs with images (powered by Alchemy NFT API)
--  **Auto-fill**: Click NFT → Contract address & token ID populated automatically
--  **Chain-Agnostic**: Create auction on any connected chain
--  **Flexible Duration**: From 2 minutes to 7 days
--  **Token Preference**: Choose USDC or USDT for settlement
--  **Chain Preference**: Specify destination chain for payment
+
+- **Visual NFT Selector**: Browse and select NFTs with images (powered by Alchemy NFT API)
+- **Auto-fill**: Click NFT → Contract address & token ID populated automatically
+- **Chain-Agnostic**: Create auction on any connected chain
+- **Flexible Duration**: From 2 minutes to 7 days
+- **Token Preference**: Choose USDC or USDT for settlement
+- **Chain Preference**: Specify destination chain for payment
 
 #### 3. Browse Auctions (`/auctions`)
+
 - **Live Auction Feed**: All active auctions across all chains
 - **Real-Time Bidding**: Place bids from any chain
 - **Cross-Chain Bid Placement**: Uses Nexus SDK for automatic transfers
 - **My Bids Section**: Track all your bids and statuses
 
 **Bid Flow**:
+
 ```typescript
 // User on Optimism bidding on Arbitrum auction
 1. User enters bid amount (e.g., 110 USDC)
@@ -239,8 +303,8 @@ keeper/src/
 - Cancel auctions (before bids placed)
 - **Claim Winning Bid**: Automatic bridge to preferred chain/token
 
-
 **Advanced Claim Logic**:
+
 ```typescript
 
 Case 1: Same chain, same token
@@ -263,37 +327,41 @@ Case 4: Different chain, different token
 
 ### Testnets (Current Deployment)
 
-| Network | Chain ID | AuctionHub | BidManager | Supported Tokens |
-|---------|----------|------------|------------|------------------|
-| **Ethereum Sepolia** | 11155111 | ✅ | ✅ | USDC, USDT |
-| **Arbitrum Sepolia** | 421614 | ✅ | ✅ | USDC, USDT |
-| **Base Sepolia** | 84532 | ✅ | ✅ | USDC, USDT |
-| **Optimism Sepolia** | 11155420 | ✅ | ✅ | USDC, USDT |
+| Network              | Chain ID | AuctionHub | BidManager | Supported Tokens |
+| -------------------- | -------- | ---------- | ---------- | ---------------- |
+| **Ethereum Sepolia** | 11155111 | ✅         | ✅         | USDC, USDT       |
+| **Arbitrum Sepolia** | 421614   | ✅         | ✅         | USDC, USDT       |
+| **Base Sepolia**     | 84532    | ✅         | ✅         | USDC, USDT       |
+| **Optimism Sepolia** | 11155420 | ✅         | ✅         | USDC, USDT       |
 
 ---
-
 
 ## Technical Highlights
 
 ### 1. Avail Nexus SDK Integration
+
 - **Unified Liquidity**: Users see total balances across all chains, in Navbar and while bidding.
 - **Seamless Bridging**: One-click cross-chain bids
 - **Atomic Execution**: Bridge + Swap in single transaction
 
 ### 2. Visual NFT Selector
+
 - **Alchemy NFT API** integration
 - Displays NFT images, names, collections
 - Auto-populates contract addresses and token IDs
 
 ### 3. Intent-Based Architecture
+
 - Sellers specify "what" they want (bid amount, preferred token/chain)
 - System handles "how" (bridging, swapping, routing)
 
 ### 4. Multi-Chain Event Aggregation
+
 - Keeper monitors 4+ chains simultaneously
 - Determines winners fairly and transparently
 
 ### 5. Flexible Settlement
+
 - 4 settlement paths automatically chosen:
   - Direct transfer (same chain, same token)
   - Uniswap swap (same chain, different token)(For testnet), Nexus Swap for Mainnet
@@ -309,4 +377,4 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 ---
 
-*Empowering sellers with global liquidity. Enabling buyers from any chain. Powered by Avail Nexus.*
+_Empowering sellers with global liquidity. Enabling buyers from any chain. Powered by Avail Nexus._
