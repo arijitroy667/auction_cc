@@ -115,9 +115,7 @@ export default function CreateAuctionPage() {
       await openTxToast(currentChainId, tx.hash);
       await tx.wait();
 
-      toast.success(
-        "NFT contract approved successfully! You can now create auctions."
-      );
+      
     } catch (error: unknown) {
       console.error("Error approving NFT:", error);
       const errorMessage =
@@ -159,13 +157,13 @@ export default function CreateAuctionPage() {
 
     if (isNaN(startingPriceNum) || isNaN(reservePriceNum)) {
       toast.error(
-        "Please enter valid numeric values for starting and reserve prices"
+        "Please enter valid numeric values for highest and reserve prices"
       );
       return;
     }
 
     if (startingPriceNum <= reservePriceNum) {
-      toast.error("Starting price must be greater than reserve price");
+      toast.error("Highest price must be greater than reserve price");
       return;
     }
 
@@ -443,7 +441,7 @@ export default function CreateAuctionPage() {
 
                 <div>
                   <label className="block text-white font-medium mb-2">
-                    Starting Price *{" "}
+                    Highest Price *{" "}
                     <span className="text-blue-400 text-sm">(in USD)</span>
                   </label>
                   <input
@@ -481,7 +479,7 @@ export default function CreateAuctionPage() {
                     }
                   />
                   <p className="text-xs text-zinc-400 mt-1">
-                    Minimum acceptable price (must be less than starting price)
+                    Minimum acceptable price (must be less than highest price)
                   </p>
                 </div>
               </div>
@@ -549,7 +547,7 @@ export default function CreateAuctionPage() {
                       }
                       className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded text-xs hover:bg-blue-500/30"
                     >
-                      5 min
+                      30 min
                     </button>
                     <button
                       type="button"
@@ -561,7 +559,7 @@ export default function CreateAuctionPage() {
                       }
                       className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded text-xs hover:bg-blue-500/30"
                     >
-                      10 min
+                      1 hr
                     </button>
                     <button
                       type="button"
@@ -573,7 +571,7 @@ export default function CreateAuctionPage() {
                       }
                       className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded text-xs hover:bg-blue-500/30"
                     >
-                      30 min
+                      2 hr
                     </button>
                     <button
                       type="button"
@@ -582,7 +580,7 @@ export default function CreateAuctionPage() {
                       }
                       className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded text-xs hover:bg-blue-500/30"
                     >
-                      1 hour
+                      5 hour
                     </button>
                   </div>
                 </div>
@@ -686,7 +684,7 @@ export default function CreateAuctionPage() {
                 <li className="flex items-start gap-2">
                   <span className="text-blue-400 mt-1">•</span>
                   <strong className="text-white">
-                    Starting price must be greater than reserve price
+                    Highest price must be greater than reserve price
                   </strong>
                 </li>
                 <li className="flex items-start gap-2">

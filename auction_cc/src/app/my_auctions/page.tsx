@@ -1030,7 +1030,7 @@ export default function MyAuctionsPage() {
                         </h3>
 
                         <div className="flex items-center justify-between text-sm">
-                          <span className="text-white/50">Starting:</span>
+                          <span className="text-white/50">Highest:</span>
                           <span className="text-white/90 font-mono">
                             ${formatPrice(auction.startingPrice)}
                           </span>
@@ -1353,7 +1353,7 @@ function AuctionDetailsModal({
 
           <div className="space-y-4">
             <div>
-              <label className="text-white/70 text-sm">Starting Price</label>
+              <label className="text-white/70 text-sm">Highest Price</label>
               <p className="text-white font-bold text-xl">
                 ${formatPrice(auction.startingPrice)}
               </p>

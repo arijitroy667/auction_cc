@@ -352,8 +352,6 @@ export default function BidForm({
       // Wait for confirmation
       await tx.wait();
 
-      toast.success("Bid placed successfully!");
-
       // Call the parent callback
       await onBidSubmit(amount);
       onClose();
