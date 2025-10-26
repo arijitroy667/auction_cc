@@ -313,14 +313,14 @@ Case 1: Same chain, same token
 → Direct transfer from BidManager to seller, no Claim button required
 
 Case 2: Same chain, different token
-→ Use Uniswap V3 swap on that chain(testnet)
+→ Use Uniswap  swap on that chain(testnet)
 -> Will use nexusSDK.swap for mainnet(code commented for testnet)
 
 Case 3: Different chain, same token
 → Use Nexus bridge
 
 Case 4: Different chain, different token
-→ Use Nexus bridgeAndExecute (bridge + swap atomically) using Uniswap V3
+→ Use Nexus bridgeAndExecute (bridge + swap atomically) using Uniswap 
 ```
 
 ---
@@ -371,7 +371,7 @@ Case 4: Different chain, different token
   - Direct transfer (same chain, same token)
   - Uniswap swap (same chain, different token)(For testnet), Nexus Swap for Mainnet
   - Nexus bridge (different chain, same token)
-  - Nexus bridgeAndExecute (different chain, different token) integrated with UniswapV3
+  - Nexus bridgeAndExecute (different chain, different token) integrated with Uniswap
 - Optimizes for gas and speed
 
 ---
